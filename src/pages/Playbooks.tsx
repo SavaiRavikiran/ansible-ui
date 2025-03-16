@@ -1,22 +1,31 @@
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { fetchPlaybooks, Playbook, executePlaybook, fetchInventories } from "@/lib/api";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { fetchPlaybooks, Playbook, executePlaybook, fetchInventories, savePlaybook } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { Plus, Play, Edit } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Plus, Play, Edit, Trash } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 export default function Playbooks() {
   const [selectedPlaybook, setSelectedPlaybook] = useState<Playbook | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
   const [selectedInventory, setSelectedInventory] = useState<string>("");
+  const [newPlaybook, setNewPlaybook] = useState<Partial<Playbook>>({
+    name: '',
+    description: '',
+    content: '---\n# New Ansible Playbook\n- name: My Playbook\n  hosts: all\n  tasks:\n    - name: Hello World\n      debug:\n        msg: "Hello from Ansible UI"\n'
+  });
+
+  const queryClient = useQueryClient();
 
   const { data: playbooks = [], isLoading: isLoadingPlaybooks } = useQuery({
     queryKey: ['playbooks'],
@@ -26,6 +35,17 @@ export default function Playbooks() {
   const { data: inventories = [] } = useQuery({
     queryKey: ['inventories'],
     queryFn: fetchInventories,
+  });
+
+  const savePlaybookMutation = useMutation({
+    mutationFn: savePlaybook,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['playbooks'] });
+      toast.success("Playbook saved successfully");
+    },
+    onError: () => {
+      toast.error("Failed to save playbook");
+    }
   });
 
   const handleEditPlaybook = (playbook: Playbook) => {
@@ -40,12 +60,47 @@ export default function Playbooks() {
   };
 
   const handleSavePlaybook = async () => {
-    // In a real app, this would save to the backend
-    toast({
-      title: "Playbook saved",
-      description: `Successfully updated ${selectedPlaybook?.name}`,
-    });
-    setIsEditing(false);
+    if (!selectedPlaybook) return;
+    
+    try {
+      await savePlaybookMutation.mutateAsync(selectedPlaybook);
+      setIsEditing(false);
+    } catch (error) {
+      console.error("Error saving playbook:", error);
+    }
+  };
+
+  const handleCreatePlaybook = async () => {
+    if (!newPlaybook.name) {
+      toast.error("Playbook name is required");
+      return;
+    }
+    
+    try {
+      // Ensure the name has .yml extension if not already present
+      let name = newPlaybook.name;
+      if (!name.endsWith('.yml') && !name.endsWith('.yaml')) {
+        name = `${name}.yml`;
+      }
+      
+      const playbook: Playbook = {
+        ...newPlaybook as Playbook,
+        name,
+        id: '',
+        path: '',
+        lastModified: new Date().toISOString(),
+      };
+      
+      await savePlaybookMutation.mutateAsync(playbook);
+      setIsCreating(false);
+      setNewPlaybook({
+        name: '',
+        description: '',
+        content: '---\n# New Ansible Playbook\n- name: My Playbook\n  hosts: all\n  tasks:\n    - name: Hello World\n      debug:\n        msg: "Hello from Ansible UI"\n'
+      });
+    } catch (error) {
+      console.error("Error creating playbook:", error);
+    }
   };
 
   const handleRunPlaybook = async (playbook: Playbook) => {
@@ -59,32 +114,28 @@ export default function Playbooks() {
     setIsRunning(false);
     
     try {
-      toast({
-        title: "Playbook execution started",
-        description: `Running ${selectedPlaybook.name} with inventory ${selectedInventory}`,
-      });
+      toast.loading(`Running ${selectedPlaybook.name} with inventory ${selectedInventory}`);
       
       const result = await executePlaybook(selectedPlaybook.id, selectedInventory);
       
-      toast({
-        title: result.status === 'success' ? "Execution successful" : "Execution failed",
-        description: `Playbook ${selectedPlaybook.name} ${result.status === 'success' ? 'completed successfully' : 'failed'}`,
-        variant: result.status === 'success' ? "default" : "destructive",
-      });
+      if (result.status === 'success') {
+        toast.success(`Playbook ${selectedPlaybook.name} completed successfully`);
+      } else {
+        toast.error(`Playbook ${selectedPlaybook.name} failed`);
+      }
+      
+      // Refresh dashboard data to show the new run
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
     } catch (error) {
-      toast({
-        title: "Execution failed",
-        description: "An error occurred while executing the playbook",
-        variant: "destructive",
-      });
+      toast.error("An error occurred while executing the playbook");
     }
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto w-full">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold tracking-tight">Playbooks</h1>
-        <Button>
+    <div className="p-3 md:p-6 max-w-7xl mx-auto w-full">
+      <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Playbooks</h1>
+        <Button onClick={() => setIsCreating(true)}>
           <Plus className="mr-2 h-4 w-4" /> New Playbook
         </Button>
       </div>
@@ -96,50 +147,113 @@ export default function Playbooks() {
           ))}
         </div>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Description</TableHead>
-              <TableHead>Last Modified</TableHead>
-              <TableHead className="w-[150px]">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {playbooks.map((playbook) => (
-              <TableRow key={playbook.id}>
-                <TableCell className="font-medium">{playbook.name}</TableCell>
-                <TableCell>{playbook.description}</TableCell>
-                <TableCell>
-                  {new Date(playbook.lastModified).toLocaleDateString()}
-                </TableCell>
-                <TableCell>
-                  <div className="flex space-x-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleEditPlaybook(playbook)}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button 
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleRunPlaybook(playbook)}
-                    >
-                      <Play className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </TableCell>
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead className="hidden md:table-cell">Description</TableHead>
+                <TableHead className="hidden md:table-cell">Last Modified</TableHead>
+                <TableHead className="w-[150px]">Actions</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {playbooks.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                    No playbooks found. Create one to get started.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                playbooks.map((playbook) => (
+                  <TableRow key={playbook.id}>
+                    <TableCell className="font-medium">{playbook.name}</TableCell>
+                    <TableCell className="hidden md:table-cell">{playbook.description}</TableCell>
+                    <TableCell className="hidden md:table-cell">
+                      {new Date(playbook.lastModified).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex space-x-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEditPlaybook(playbook)}
+                          title="Edit Playbook"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button 
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleRunPlaybook(playbook)}
+                          title="Run Playbook"
+                        >
+                          <Play className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
       )}
+
+      {/* Create Playbook Dialog */}
+      <Dialog open={isCreating} onOpenChange={setIsCreating}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Create New Playbook</DialogTitle>
+            <DialogDescription>
+              Create a new Ansible playbook file. The file will be saved to your configured playbooks directory.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Name</Label>
+              <Input
+                id="name"
+                placeholder="my-playbook.yml"
+                value={newPlaybook.name}
+                onChange={(e) => setNewPlaybook({...newPlaybook, name: e.target.value})}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="description">Description</Label>
+              <Input
+                id="description"
+                placeholder="Description of what this playbook does"
+                value={newPlaybook.description}
+                onChange={(e) => setNewPlaybook({...newPlaybook, description: e.target.value})}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="content">Content</Label>
+              <Textarea
+                id="content"
+                className="font-mono h-[40vh]"
+                value={newPlaybook.content}
+                onChange={(e) => setNewPlaybook({...newPlaybook, content: e.target.value})}
+              />
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsCreating(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreatePlaybook} disabled={savePlaybookMutation.isPending}>
+              Create Playbook
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Editor Sheet */}
       <Sheet open={isEditing} onOpenChange={setIsEditing}>
-        <SheetContent className="sm:max-w-2xl w-[90vw]" side="right">
+        <SheetContent className="sm:max-w-2xl w-[90vw] overflow-y-auto" side="right">
           <SheetHeader>
             <SheetTitle>Edit Playbook: {selectedPlaybook?.name}</SheetTitle>
           </SheetHeader>
@@ -182,7 +296,9 @@ export default function Playbooks() {
               <Button variant="outline" onClick={() => setIsEditing(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleSavePlaybook}>Save Changes</Button>
+              <Button onClick={handleSavePlaybook} disabled={savePlaybookMutation.isPending}>
+                Save Changes
+              </Button>
             </div>
           </div>
         </SheetContent>
