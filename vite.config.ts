@@ -28,18 +28,8 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: [
     react(),
-    // Only use componentTagger in development if available
-    mode === 'development' && 
-    (() => {
-      try {
-        const { componentTagger } = require("lovable-tagger");
-        return componentTagger();
-      } catch (e) {
-        console.warn("Could not load lovable-tagger, skipping...");
-        return null;
-      }
-    })(),
-  ].filter(Boolean),
+    // Skip lovable-tagger completely since it's causing issues with Node.js 16
+  ],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
