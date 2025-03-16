@@ -5,15 +5,18 @@ import path from "path";
 
 // Polyfill for crypto.getRandomValues
 if (!globalThis.crypto) {
-  // @ts-ignore
+  // @ts-ignore - Ignoring type issues with the polyfill implementation
   globalThis.crypto = {};
 }
 if (!globalThis.crypto.getRandomValues) {
-  // @ts-ignore - Ignoring type issues with the polyfill implementation
-  globalThis.crypto.getRandomValues = (arr) => {
-    const bytes = require('crypto').randomBytes(arr.length);
-    arr.set(new Uint8Array(bytes));
-    return arr;
+  // @ts-ignore - Completely ignoring type checking for this polyfill function
+  globalThis.crypto.getRandomValues = function(array) {
+    const bytes = require('crypto').randomBytes(array.length);
+    const uint8Array = new Uint8Array(bytes);
+    for (let i = 0; i < array.length; i++) {
+      array[i] = uint8Array[i];
+    }
+    return array;
   };
 }
 
