@@ -9,6 +9,7 @@ if (!globalThis.crypto) {
   globalThis.crypto = {};
 }
 if (!globalThis.crypto.getRandomValues) {
+  // @ts-ignore - Ignoring type issues with the polyfill implementation
   globalThis.crypto.getRandomValues = (arr) => {
     const bytes = require('crypto').randomBytes(arr.length);
     arr.set(new Uint8Array(bytes));
