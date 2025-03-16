@@ -3,6 +3,19 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 
+// Polyfill for crypto.getRandomValues
+if (!globalThis.crypto) {
+  // @ts-ignore
+  globalThis.crypto = {};
+}
+if (!globalThis.crypto.getRandomValues) {
+  globalThis.crypto.getRandomValues = (arr) => {
+    const bytes = require('crypto').randomBytes(arr.length);
+    arr.set(new Uint8Array(bytes));
+    return arr;
+  };
+}
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   server: {
