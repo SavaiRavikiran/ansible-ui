@@ -1,4 +1,4 @@
-# Welcome to your Lovable project
+# Welcome to Ansible UI project
 
 ## Project info
 
