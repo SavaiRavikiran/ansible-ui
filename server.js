@@ -17,8 +17,22 @@ const {
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Configure middleware
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
+
+// Add some basic logging middleware
+app.use((req, res, next) => {
+  const start = Date.now();
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url} - Request started`);
+  
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.url} - Response: ${res.statusCode} - ${duration}ms`);
+  });
+  
+  next();
+});
 
 // Dashboard stats
 app.get('/api/dashboard', async (req, res) => {
@@ -136,6 +150,41 @@ app.post('/api/execute-playbook', async (req, res) => {
 // Serve static files from the React app
 app.use(express.static('dist'));
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+// Catch-all route to return the main index.html for client-side routing
+app.get('*', (req, res) => {
+  res.sendFile('dist/index.html', { root: __dirname });
 });
+
+// Start the server
+app.listen(PORT, () => {
+  console.log(`
+  ============================================
+  🚀 Ansible UI Server running on port ${PORT} 🚀
+  
+  Local:            http://localhost:${PORT}
+  Network:          http://${getLocalIpAddress()}:${PORT}
+  
+  Configuration:
+  - Playbooks dir:  ${process.env.ANSIBLE_PLAYBOOKS_DIR || '/etc/ansible/playbooks'}
+  - Inventories:    ${process.env.ANSIBLE_INVENTORIES_DIR || '/etc/ansible/inventories'}
+  - Roles:          ${process.env.ANSIBLE_ROLES_DIR || '/etc/ansible/roles'}
+  ============================================
+  `);
+});
+
+// Helper function to get the local IP address
+function getLocalIpAddress() {
+  const { networkInterfaces } = require('os');
+  const nets = networkInterfaces();
+  
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name]) {
+      // Skip over non-IPv4 and internal (i.e. 127.0.0.1) addresses
+      if (net.family === 'IPv4' && !net.internal) {
+        return net.address;
+      }
+    }
+  }
+  
+  return 'localhost';
+}
