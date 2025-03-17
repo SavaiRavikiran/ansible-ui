@@ -1,7 +1,10 @@
 
-const express = require('express');
-const cors = require('cors');
-const { 
+import express from 'express';
+import cors from 'cors';
+import { fileURLToPath } from 'url';
+import path from 'path';
+import os from 'os';
+import { 
   getPlaybooks,
   getInventories,
   getRoles,
@@ -12,7 +15,10 @@ const {
   createRole,
   executePlaybook,
   addHostToInventory
-} = require('./dist/lib/ansible-service.js');
+} from './dist/lib/ansible-service.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -174,8 +180,7 @@ app.listen(PORT, () => {
 
 // Helper function to get the local IP address
 function getLocalIpAddress() {
-  const { networkInterfaces } = require('os');
-  const nets = networkInterfaces();
+  const nets = os.networkInterfaces();
   
   for (const name of Object.keys(nets)) {
     for (const net of nets[name]) {
