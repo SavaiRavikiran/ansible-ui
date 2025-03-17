@@ -1,0 +1,18 @@
+
+version: '3.8'
+
+services:
+  ansible-ui:
+    build: .
+    ports:
+      - "3001:3001"
+    volumes:
+      # Mount your local Ansible directories to make them available to the container
+      - ${ANSIBLE_PLAYBOOKS_DIR:-/etc/ansible/playbooks}:/etc/ansible/playbooks
+      - ${ANSIBLE_INVENTORIES_DIR:-/etc/ansible/inventories}:/etc/ansible/inventories
+      - ${ANSIBLE_ROLES_DIR:-/etc/ansible/roles}:/etc/ansible/roles
+      - ${ANSIBLE_CONFIG_FILE:-/etc/ansible/ansible.cfg}:/etc/ansible/ansible.cfg
+    environment:
+      - ANSIBLE_PLAYBOOKS_DIR=/etc/ansible/playbooks
+      - ANSIBLE_INVENTORIES_DIR=/etc/ansible/inventories
+      - ANSIBLE_ROLES_DIR=/etc/ansible/roles
