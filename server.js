@@ -15,7 +15,7 @@ import {
   createRole,
   executePlaybook,
   addHostToInventory
-} from './dist/lib/ansible-service.js';
+} from './src/lib/ansible-service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
