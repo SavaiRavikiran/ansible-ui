@@ -2,6 +2,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
+import { componentTagger } from "lovable-tagger";
 
 // Polyfill for crypto.getRandomValues
 if (!globalThis.crypto) {
@@ -28,8 +29,8 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: [
     react(),
-    // Skip lovable-tagger completely since it's causing issues with Node.js 16
-  ],
+    mode === 'development' && componentTagger(),
+  ].filter(Boolean),
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
