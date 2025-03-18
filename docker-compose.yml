@@ -8,9 +8,9 @@ services:
     volumes:
       - ./lib:/app/lib
       - ./ansible.db:/app/ansible.db
-      - ${ANSIBLE_PLAYBOOKS_DIR:-/etc/ansible/playbooks}:/etc/ansible/playbooks
-      - ${ANSIBLE_INVENTORIES_DIR:-/etc/ansible/inventories}:/etc/ansible/inventories
-      - ${ANSIBLE_ROLES_DIR:-/etc/ansible/roles}:/etc/ansible/roles
+      - ${ANSIBLE_PLAYBOOKS_DIR:-/etc/ansible/playbooks}:${ANSIBLE_PLAYBOOKS_DIR:-/etc/ansible/playbooks}
+      - ${ANSIBLE_INVENTORIES_DIR:-/etc/ansible/inventories}:${ANSIBLE_INVENTORIES_DIR:-/etc/ansible/inventories}
+      - ${ANSIBLE_ROLES_DIR:-/etc/ansible/roles}:${ANSIBLE_ROLES_DIR:-/etc/ansible/roles}
     environment:
       - PORT=3001
       - NODE_ENV=production

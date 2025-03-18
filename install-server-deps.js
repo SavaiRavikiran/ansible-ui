@@ -12,6 +12,8 @@ const __dirname = path.dirname(__filename);
 const serverDeps = [
   'express',
   'cors',
+  'sqlite',
+  'sqlite3'
 ];
 
 console.log('Installing required server dependencies...');
@@ -50,19 +52,24 @@ A web-based UI for managing Ansible resources on your local machine.
 
 ## Configuration
 
-Update the paths to your Ansible files in \`src/lib/ansible-service.ts\` if your Ansible configuration is located somewhere other than the default locations.
+You can set the following environment variables to customize paths:
+- ANSIBLE_PLAYBOOKS_DIR (default: /etc/ansible/playbooks)
+- ANSIBLE_INVENTORIES_DIR (default: /etc/ansible/inventories)
+- ANSIBLE_ROLES_DIR (default: /etc/ansible/roles)
 
-Default paths:
-- Playbooks: /etc/ansible/playbooks
-- Inventories: /etc/ansible/inventories
-- Roles: /etc/ansible/roles
-- Config: /etc/ansible/ansible.cfg
+Example:
+\`\`\`
+export ANSIBLE_PLAYBOOKS_DIR=/path/to/your/playbooks
+export ANSIBLE_INVENTORIES_DIR=/path/to/your/inventories
+export ANSIBLE_ROLES_DIR=/path/to/your/roles
+\`\`\`
 
-You can also set the following environment variables:
-- ANSIBLE_PLAYBOOKS_DIR
-- ANSIBLE_INVENTORIES_DIR
-- ANSIBLE_ROLES_DIR
-- ANSIBLE_CONFIG_FILE
+## Using Docker
+
+You can also run the application using Docker:
+\`\`\`
+docker-compose up --build
+\`\`\`
 
 ## Features
 

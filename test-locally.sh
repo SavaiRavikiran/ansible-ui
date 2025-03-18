@@ -52,6 +52,11 @@ export ANSIBLE_PLAYBOOKS_DIR=$ANSIBLE_PLAYBOOKS_DIR
 export ANSIBLE_INVENTORIES_DIR=$ANSIBLE_INVENTORIES_DIR
 export ANSIBLE_ROLES_DIR=$ANSIBLE_ROLES_DIR
 
+# Check SQLite3 is installed
+if ! command -v sqlite3 &> /dev/null; then
+    echo -e "${YELLOW}SQLite3 command line tool not found. This is OK for basic operation but useful for debugging.${NC}"
+fi
+
 # Start the server in the background and redirect output to a file
 node server.js > server-logs.txt 2>&1 &
 SERVER_PID=$!
@@ -67,6 +72,8 @@ if ps -p $SERVER_PID > /dev/null; then
     echo -e "${YELLOW}To stop the server, run: kill $SERVER_PID${NC}"
 else
     echo -e "${RED}Failed to start the server. Check server-logs.txt for details.${NC}"
+    echo -e "${YELLOW}Printing last 20 lines of server logs:${NC}"
+    tail -n 20 server-logs.txt
     exit 1
 fi
 

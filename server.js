@@ -1,3 +1,4 @@
+
 import express from 'express';
 import cors from 'cors';
 import { fileURLToPath } from 'url';
@@ -53,21 +54,31 @@ async function initializeDatabase() {
   }
 }
 
+// Output Ansible directory configuration
+console.log('Ansible directories configuration:');
+console.log(`- Playbooks: ${process.env.ANSIBLE_PLAYBOOKS_DIR || '/etc/ansible/playbooks'}`);
+console.log(`- Inventories: ${process.env.ANSIBLE_INVENTORIES_DIR || '/etc/ansible/inventories'}`);
+console.log(`- Roles: ${process.env.ANSIBLE_ROLES_DIR || '/etc/ansible/roles'}`);
+
 // Try to import from the lib directory first, then fall back to compiled JS
 let ansibleService;
 try {
   // First try importing from the lib directory (JavaScript)
+  console.log('Attempting to load ansible-service.js from lib directory');
   ansibleService = await import('./lib/ansible-service.js');
   console.log('Successfully loaded ansible-service.js from lib directory');
 } catch (libError) {
-  console.warn('Could not load ansible-service.js from lib directory:', libError.message);
+  console.error('Could not load ansible-service.js from lib directory:', libError.message);
+  console.error(libError.stack);
   
   try {
     // Try importing from the src/lib directory (TypeScript compiled)
+    console.log('Attempting to load ansible-service.js from src/lib directory');
     ansibleService = await import('./src/lib/ansible-service.js');
     console.log('Successfully loaded ansible-service.js from src/lib directory');
   } catch (srcError) {
-    console.warn('Could not load ansible-service.js from src/lib:', srcError.message);
+    console.error('Could not load ansible-service.js from src/lib:', srcError.message);
+    console.error(srcError.stack);
     
     // Simple mocked implementations for testing
     console.warn('Using simplified implementation');
@@ -211,7 +222,9 @@ async function saveDashboardStats(stats) {
 // Dashboard stats
 app.get('/api/dashboard', async (req, res) => {
   try {
+    console.log('Fetching dashboard stats...');
     const stats = await getDashboardStats();
+    console.log('Dashboard stats fetched:', stats);
     
     // Replace recent runs with data from database if available
     const dbRuns = await getRecentRunsFromDB();
@@ -232,7 +245,9 @@ app.get('/api/dashboard', async (req, res) => {
 // Playbooks
 app.get('/api/playbooks', async (req, res) => {
   try {
+    console.log('Fetching playbooks...');
     const playbooks = await getPlaybooks();
+    console.log(`Fetched ${playbooks.length} playbooks`);
     res.json(playbooks);
   } catch (error) {
     console.error('Error fetching playbooks:', error);
@@ -253,7 +268,9 @@ app.post('/api/playbooks', async (req, res) => {
 // Inventories
 app.get('/api/inventories', async (req, res) => {
   try {
+    console.log('Fetching inventories...');
     const inventories = await getInventories();
+    console.log(`Fetched ${inventories.length} inventories`);
     res.json(inventories);
   } catch (error) {
     console.error('Error fetching inventories:', error);
@@ -274,7 +291,9 @@ app.post('/api/inventories', async (req, res) => {
 // Roles
 app.get('/api/roles', async (req, res) => {
   try {
+    console.log('Fetching roles...');
     const roles = await getRoles();
+    console.log(`Fetched ${roles.length} roles`);
     res.json(roles);
   } catch (error) {
     console.error('Error fetching roles:', error);
@@ -295,7 +314,9 @@ app.post('/api/roles', async (req, res) => {
 // Hosts
 app.get('/api/hosts', async (req, res) => {
   try {
+    console.log('Fetching hosts...');
     const hosts = await getHosts();
+    console.log(`Fetched ${hosts.length} hosts`);
     res.json(hosts);
   } catch (error) {
     console.error('Error fetching hosts:', error);
