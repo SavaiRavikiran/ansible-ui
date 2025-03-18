@@ -5,14 +5,52 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 import os from 'os';
 import fs from 'fs';
+import sqlite3 from 'sqlite3';
+import { open } from 'sqlite';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Setup SQLite database
+const dbPath = path.join(__dirname, 'ansible.db');
+let db;
+
+// Initialize database connection
+async function initializeDatabase() {
+  db = await open({
+    filename: dbPath,
+    driver: sqlite3.Database
+  });
+  
+  // Create tables if they don't exist
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS playbook_runs (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      status TEXT NOT NULL,
+      timestamp TEXT NOT NULL
+    );
+    
+    CREATE TABLE IF NOT EXISTS ansible_stats (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      timestamp TEXT NOT NULL,
+      playbooks INTEGER NOT NULL,
+      inventories INTEGER NOT NULL,
+      roles INTEGER NOT NULL,
+      hosts INTEGER NOT NULL,
+      cpu TEXT NOT NULL,
+      memory TEXT NOT NULL,
+      disk TEXT NOT NULL
+    );
+  `);
+  
+  console.log(`SQLite database initialized at ${dbPath}`);
+  return db;
+}
+
 // Manual import of the ansible service functions
 // This avoids direct import of TypeScript files
-const ansibleServicePath = path.join(__dirname, 'src', 'lib', 'ansible-service.ts');
-const tsContent = fs.readFileSync(ansibleServicePath, 'utf8');
+const ansibleServicePath = path.join(__dirname, 'lib', 'ansible-service.js');
 
 // Import the required functions from JavaScript equivalent if it exists
 // or use a simpler implementation
@@ -108,10 +146,71 @@ app.use((req, res, next) => {
   next();
 });
 
+// Save playbook run to database
+async function savePlaybookRun(run) {
+  if (!db) return;
+  
+  try {
+    await db.run(
+      'INSERT OR REPLACE INTO playbook_runs (id, name, status, timestamp) VALUES (?, ?, ?, ?)',
+      [run.id, run.name, run.status, run.timestamp || new Date().toISOString()]
+    );
+  } catch (error) {
+    console.error('Error saving playbook run to database:', error);
+  }
+}
+
+// Get recent runs from database
+async function getRecentRunsFromDB() {
+  if (!db) return [];
+  
+  try {
+    return await db.all(
+      'SELECT * FROM playbook_runs ORDER BY timestamp DESC LIMIT 5'
+    );
+  } catch (error) {
+    console.error('Error fetching recent runs from database:', error);
+    return [];
+  }
+}
+
+// Save dashboard stats to database
+async function saveDashboardStats(stats) {
+  if (!db) return;
+  
+  try {
+    await db.run(
+      'INSERT INTO ansible_stats (timestamp, playbooks, inventories, roles, hosts, cpu, memory, disk) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        new Date().toISOString(),
+        stats.playbooks,
+        stats.inventories,
+        stats.roles,
+        stats.hosts,
+        stats.system.cpu,
+        stats.system.memory,
+        stats.system.disk
+      ]
+    );
+  } catch (error) {
+    console.error('Error saving dashboard stats to database:', error);
+  }
+}
+
 // Dashboard stats
 app.get('/api/dashboard', async (req, res) => {
   try {
     const stats = await getDashboardStats();
+    
+    // Replace recent runs with data from database if available
+    const dbRuns = await getRecentRunsFromDB();
+    if (dbRuns.length > 0) {
+      stats.recentRuns = dbRuns;
+    }
+    
+    // Save stats to database for historical tracking
+    await saveDashboardStats(stats);
+    
     res.json(stats);
   } catch (error) {
     console.error('Error fetching dashboard stats:', error);
@@ -214,6 +313,20 @@ app.post('/api/execute-playbook', async (req, res) => {
   try {
     const { playbookId, inventoryId } = req.body;
     const result = await executePlaybook(playbookId, inventoryId);
+    
+    // Save run to database
+    const playbooks = await getPlaybooks();
+    const playbook = playbooks.find(p => p.id === playbookId);
+    
+    if (playbook) {
+      await savePlaybookRun({
+        id: result.id,
+        name: playbook.name,
+        status: result.status,
+        timestamp: new Date().toISOString()
+      });
+    }
+    
     res.json(result);
   } catch (error) {
     console.error('Error executing playbook:', error);
@@ -226,12 +339,13 @@ app.use(express.static('dist'));
 
 // Catch-all route to return the main index.html for client-side routing
 app.get('*', (req, res) => {
-  res.sendFile('dist/index.html', { root: __dirname });
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
-// Start the server
-app.listen(PORT, () => {
-  console.log(`
+// Start the server after initializing the database
+initializeDatabase().then(() => {
+  app.listen(PORT, () => {
+    console.log(`
   ============================================
   🚀 Ansible UI Server running on port ${PORT} 🚀
   
@@ -239,11 +353,16 @@ app.listen(PORT, () => {
   Network:          http://${getLocalIpAddress()}:${PORT}
   
   Configuration:
+  - Database:       ${dbPath}
   - Playbooks dir:  ${process.env.ANSIBLE_PLAYBOOKS_DIR || '/etc/ansible/playbooks'}
   - Inventories:    ${process.env.ANSIBLE_INVENTORIES_DIR || '/etc/ansible/inventories'}
   - Roles:          ${process.env.ANSIBLE_ROLES_DIR || '/etc/ansible/roles'}
   ============================================
   `);
+  });
+}).catch(error => {
+  console.error('Failed to initialize database:', error);
+  process.exit(1);
 });
 
 // Helper function to get the local IP address

@@ -1,10 +1,12 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileCode, Folder, List, Server } from "lucide-react";
+import { FileCode, Folder, List, Server, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { fetchDashboardStats } from "@/lib/api";
 import { Link } from "react-router-dom";
+import { useToast } from "@/hooks/use-toast";
+import { useEffect } from "react";
 
 const StatCard = ({ title, value, icon: Icon, href }: { 
   title: string; 
@@ -27,15 +29,45 @@ const StatCard = ({ title, value, icon: Icon, href }: {
 );
 
 export default function Dashboard() {
-  const { data: stats, isLoading } = useQuery({
+  const { toast } = useToast();
+  const { 
+    data: stats, 
+    isLoading, 
+    isError, 
+    error, 
+    refetch 
+  } = useQuery({
     queryKey: ['dashboard-stats'],
     queryFn: fetchDashboardStats,
+    refetchInterval: 30000, // Auto-refresh every 30 seconds
   });
+
+  useEffect(() => {
+    if (isError) {
+      toast({
+        title: "Error loading dashboard data",
+        description: String(error),
+        variant: "destructive",
+      });
+    }
+  }, [isError, error, toast]);
+
+  const handleRefresh = async () => {
+    toast({
+      title: "Refreshing dashboard data",
+      description: "Fetching latest data from server",
+    });
+    await refetch();
+  };
 
   return (
     <div className="p-6 max-w-7xl mx-auto w-full">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+        <Button onClick={handleRefresh} className="gap-2">
+          <RefreshCw className="h-4 w-4" />
+          Refresh
+        </Button>
       </div>
 
       {isLoading ? (
@@ -75,11 +107,13 @@ export default function Dashboard() {
 
       <div className="mt-8 grid gap-4 md:grid-cols-2">
         <Card>
-          <CardHeader>
-            <CardTitle>Recent Playbook Runs</CardTitle>
-            <CardDescription>
-              View your most recent playbook executions
-            </CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Recent Playbook Runs</CardTitle>
+              <CardDescription>
+                View your most recent playbook executions
+              </CardDescription>
+            </div>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -92,9 +126,20 @@ export default function Dashboard() {
               <div className="space-y-2">
                 {stats.recentRuns.map((run, i) => (
                   <div key={i} className="flex justify-between items-center p-2 border rounded-md">
-                    <div className="font-medium">{run.name}</div>
-                    <div className={`text-sm ${run.status === 'success' ? 'text-green-500' : 'text-red-500'}`}>
-                      {run.status}
+                    <div className="font-medium truncate max-w-[250px]" title={run.name}>
+                      {run.name}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-xs text-muted-foreground">
+                        {new Date(run.timestamp).toLocaleString()}
+                      </div>
+                      <div className={`text-sm font-medium px-2 py-1 rounded-full ${
+                        run.status === 'success' 
+                          ? 'bg-green-100 text-green-700' 
+                          : 'bg-red-100 text-red-700'
+                      }`}>
+                        {run.status}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -123,17 +168,41 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="flex justify-between">
+                <div className="flex justify-between items-center">
                   <span>CPU Usage</span>
-                  <span>{stats?.system?.cpu || "0%"}</span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-32 bg-gray-200 rounded-full h-2.5">
+                      <div 
+                        className="bg-blue-600 h-2.5 rounded-full" 
+                        style={{ width: stats?.system?.cpu || "0%" }} 
+                      ></div>
+                    </div>
+                    <span>{stats?.system?.cpu || "0%"}</span>
+                  </div>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between items-center">
                   <span>Memory Usage</span>
-                  <span>{stats?.system?.memory || "0%"}</span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-32 bg-gray-200 rounded-full h-2.5">
+                      <div 
+                        className="bg-purple-600 h-2.5 rounded-full" 
+                        style={{ width: stats?.system?.memory || "0%" }} 
+                      ></div>
+                    </div>
+                    <span>{stats?.system?.memory || "0%"}</span>
+                  </div>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between items-center">
                   <span>Disk Usage</span>
-                  <span>{stats?.system?.disk || "0%"}</span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-32 bg-gray-200 rounded-full h-2.5">
+                      <div 
+                        className="bg-yellow-600 h-2.5 rounded-full" 
+                        style={{ width: stats?.system?.disk || "0%" }} 
+                      ></div>
+                    </div>
+                    <span>{stats?.system?.disk || "0%"}</span>
+                  </div>
                 </div>
               </div>
             )}
