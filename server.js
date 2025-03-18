@@ -1,4 +1,3 @@
-
 import express from 'express';
 import cors from 'cors';
 import { fileURLToPath } from 'url';
@@ -17,100 +16,111 @@ let db;
 
 // Initialize database connection
 async function initializeDatabase() {
-  db = await open({
-    filename: dbPath,
-    driver: sqlite3.Database
-  });
-  
-  // Create tables if they don't exist
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS playbook_runs (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      status TEXT NOT NULL,
-      timestamp TEXT NOT NULL
-    );
+  try {
+    console.log(`Initializing SQLite database at ${dbPath}`);
+    db = await open({
+      filename: dbPath,
+      driver: sqlite3.Database
+    });
     
-    CREATE TABLE IF NOT EXISTS ansible_stats (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      timestamp TEXT NOT NULL,
-      playbooks INTEGER NOT NULL,
-      inventories INTEGER NOT NULL,
-      roles INTEGER NOT NULL,
-      hosts INTEGER NOT NULL,
-      cpu TEXT NOT NULL,
-      memory TEXT NOT NULL,
-      disk TEXT NOT NULL
-    );
-  `);
-  
-  console.log(`SQLite database initialized at ${dbPath}`);
-  return db;
+    // Create tables if they don't exist
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS playbook_runs (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        status TEXT NOT NULL,
+        timestamp TEXT NOT NULL
+      );
+      
+      CREATE TABLE IF NOT EXISTS ansible_stats (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp TEXT NOT NULL,
+        playbooks INTEGER NOT NULL,
+        inventories INTEGER NOT NULL,
+        roles INTEGER NOT NULL,
+        hosts INTEGER NOT NULL,
+        cpu TEXT NOT NULL,
+        memory TEXT NOT NULL,
+        disk TEXT NOT NULL
+      );
+    `);
+    
+    console.log(`SQLite database initialized at ${dbPath}`);
+    return db;
+  } catch (error) {
+    console.error(`Database initialization error:`, error);
+    throw error;
+  }
 }
 
-// Manual import of the ansible service functions
-// This avoids direct import of TypeScript files
-const ansibleServicePath = path.join(__dirname, 'lib', 'ansible-service.js');
-
-// Import the required functions from JavaScript equivalent if it exists
-// or use a simpler implementation
+// Try to import from the lib directory first, then fall back to compiled JS
 let ansibleService;
 try {
-  // Try to import from the compiled JS if it exists
+  // First try importing from the lib directory (JavaScript)
   ansibleService = await import('./lib/ansible-service.js');
-} catch (error) {
-  console.warn('Could not load ansible-service.js, using simplified implementation.');
+  console.log('Successfully loaded ansible-service.js from lib directory');
+} catch (libError) {
+  console.warn('Could not load ansible-service.js from lib directory:', libError.message);
   
-  // Simple mocked implementations for testing
-  ansibleService = {
-    getPlaybooks: async () => {
-      console.log('Mock: getPlaybooks called');
-      return [];
-    },
-    getInventories: async () => {
-      console.log('Mock: getInventories called');
-      return [];
-    },
-    getRoles: async () => {
-      console.log('Mock: getRoles called');
-      return [];
-    },
-    getHosts: async () => {
-      console.log('Mock: getHosts called');
-      return [];
-    },
-    getDashboardStats: async () => {
-      console.log('Mock: getDashboardStats called');
-      return {
-        playbooks: 0,
-        inventories: 0,
-        roles: 0,
-        hosts: 0,
-        recentRuns: [],
-        system: { cpu: '0%', memory: '0%', disk: '0%' }
-      };
-    },
-    savePlaybook: async (playbook) => {
-      console.log('Mock: savePlaybook called', playbook);
-      return { ...playbook, id: 'mock-id' };
-    },
-    saveInventory: async (inventory) => {
-      console.log('Mock: saveInventory called', inventory);
-      return { ...inventory, id: 'mock-id' };
-    },
-    createRole: async (role) => {
-      console.log('Mock: createRole called', role);
-      return { ...role, id: 'mock-id' };
-    },
-    executePlaybook: async (playbookId, inventoryId) => {
-      console.log('Mock: executePlaybook called', { playbookId, inventoryId });
-      return { id: 'mock-run-id', status: 'success' };
-    },
-    addHostToInventory: async (inventoryId, host) => {
-      console.log('Mock: addHostToInventory called', { inventoryId, host });
-      return true;
-    }
-  };
+  try {
+    // Try importing from the src/lib directory (TypeScript compiled)
+    ansibleService = await import('./src/lib/ansible-service.js');
+    console.log('Successfully loaded ansible-service.js from src/lib directory');
+  } catch (srcError) {
+    console.warn('Could not load ansible-service.js from src/lib:', srcError.message);
+    
+    // Simple mocked implementations for testing
+    console.warn('Using simplified implementation');
+    ansibleService = {
+      getPlaybooks: async () => {
+        console.log('Mock: getPlaybooks called');
+        return [];
+      },
+      getInventories: async () => {
+        console.log('Mock: getInventories called');
+        return [];
+      },
+      getRoles: async () => {
+        console.log('Mock: getRoles called');
+        return [];
+      },
+      getHosts: async () => {
+        console.log('Mock: getHosts called');
+        return [];
+      },
+      getDashboardStats: async () => {
+        console.log('Mock: getDashboardStats called');
+        return {
+          playbooks: 0,
+          inventories: 0,
+          roles: 0,
+          hosts: 0,
+          recentRuns: [],
+          system: { cpu: '0%', memory: '0%', disk: '0%' }
+        };
+      },
+      savePlaybook: async (playbook) => {
+        console.log('Mock: savePlaybook called', playbook);
+        return { ...playbook, id: 'mock-id' };
+      },
+      saveInventory: async (inventory) => {
+        console.log('Mock: saveInventory called', inventory);
+        return { ...inventory, id: 'mock-id' };
+      },
+      createRole: async (role) => {
+        console.log('Mock: createRole called', role);
+        return { ...role, id: 'mock-id' };
+      },
+      executePlaybook: async (playbookId, inventoryId) => {
+        console.log('Mock: executePlaybook called', { playbookId, inventoryId });
+        return { id: 'mock-run-id', status: 'success' };
+      },
+      addHostToInventory: async (inventoryId, host) => {
+        console.log('Mock: addHostToInventory called', { inventoryId, host });
+        return true;
+      }
+    };
+  }
 }
 
 const {
@@ -151,6 +161,7 @@ async function savePlaybookRun(run) {
   if (!db) return;
   
   try {
+    console.log(`Saving playbook run to database: ${JSON.stringify(run)}`);
     await db.run(
       'INSERT OR REPLACE INTO playbook_runs (id, name, status, timestamp) VALUES (?, ?, ?, ?)',
       [run.id, run.name, run.status, run.timestamp || new Date().toISOString()]
@@ -352,11 +363,10 @@ initializeDatabase().then(() => {
   Local:            http://localhost:${PORT}
   Network:          http://${getLocalIpAddress()}:${PORT}
   
-  Configuration:
-  - Database:       ${dbPath}
-  - Playbooks dir:  ${process.env.ANSIBLE_PLAYBOOKS_DIR || '/etc/ansible/playbooks'}
-  - Inventories:    ${process.env.ANSIBLE_INVENTORIES_DIR || '/etc/ansible/inventories'}
-  - Roles:          ${process.env.ANSIBLE_ROLES_DIR || '/etc/ansible/roles'}
+  Database:         ${dbPath}
+  Playbooks dir:    ${process.env.ANSIBLE_PLAYBOOKS_DIR || '/etc/ansible/playbooks'}
+  Inventories:      ${process.env.ANSIBLE_INVENTORIES_DIR || '/etc/ansible/inventories'}
+  Roles:            ${process.env.ANSIBLE_ROLES_DIR || '/etc/ansible/roles'}
   ============================================
   `);
   });

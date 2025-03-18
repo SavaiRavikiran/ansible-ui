@@ -14,7 +14,7 @@ const StatCard = ({ title, value, icon: Icon, href }: {
   icon: React.ElementType;
   href: string;
 }) => (
-  <Card>
+  <Card className="animate-fade-in hover:shadow-lg transition-all duration-300 hover:scale-[1.02]">
     <CardHeader className="flex flex-row items-center justify-between pb-2">
       <CardTitle className="text-sm font-medium">{title}</CardTitle>
       <Icon className="h-4 w-4 text-muted-foreground" />
@@ -64,7 +64,7 @@ export default function Dashboard() {
     <div className="p-6 max-w-7xl mx-auto w-full">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <Button onClick={handleRefresh} className="gap-2">
+        <Button onClick={handleRefresh} className="gap-2 hover:scale-105 transition-transform duration-200">
           <RefreshCw className="h-4 w-4" />
           Refresh
         </Button>
@@ -106,7 +106,7 @@ export default function Dashboard() {
       )}
 
       <div className="mt-8 grid gap-4 md:grid-cols-2">
-        <Card>
+        <Card className="animate-fade-in transition-all duration-300 hover:shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle>Recent Playbook Runs</CardTitle>
@@ -125,7 +125,7 @@ export default function Dashboard() {
             ) : stats?.recentRuns?.length ? (
               <div className="space-y-2">
                 {stats.recentRuns.map((run, i) => (
-                  <div key={i} className="flex justify-between items-center p-2 border rounded-md">
+                  <div key={i} className="flex justify-between items-center p-2 border rounded-md hover:bg-accent transition-colors duration-200">
                     <div className="font-medium truncate max-w-[250px]" title={run.name}>
                       {run.name}
                     </div>
@@ -135,8 +135,8 @@ export default function Dashboard() {
                       </div>
                       <div className={`text-sm font-medium px-2 py-1 rounded-full ${
                         run.status === 'success' 
-                          ? 'bg-green-100 text-green-700' 
-                          : 'bg-red-100 text-red-700'
+                          ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' 
+                          : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
                       }`}>
                         {run.status}
                       </div>
@@ -152,7 +152,7 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="animate-fade-in transition-all duration-300 hover:shadow-lg">
           <CardHeader>
             <CardTitle>System Health</CardTitle>
             <CardDescription>
@@ -171,9 +171,9 @@ export default function Dashboard() {
                 <div className="flex justify-between items-center">
                   <span>CPU Usage</span>
                   <div className="flex items-center gap-2">
-                    <div className="w-32 bg-gray-200 rounded-full h-2.5">
+                    <div className="w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
                       <div 
-                        className="bg-blue-600 h-2.5 rounded-full" 
+                        className="bg-blue-600 h-2.5 rounded-full transition-all duration-500 ease-in-out" 
                         style={{ width: stats?.system?.cpu || "0%" }} 
                       ></div>
                     </div>
@@ -183,9 +183,9 @@ export default function Dashboard() {
                 <div className="flex justify-between items-center">
                   <span>Memory Usage</span>
                   <div className="flex items-center gap-2">
-                    <div className="w-32 bg-gray-200 rounded-full h-2.5">
+                    <div className="w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
                       <div 
-                        className="bg-purple-600 h-2.5 rounded-full" 
+                        className="bg-purple-600 h-2.5 rounded-full transition-all duration-500 ease-in-out" 
                         style={{ width: stats?.system?.memory || "0%" }} 
                       ></div>
                     </div>
@@ -195,9 +195,9 @@ export default function Dashboard() {
                 <div className="flex justify-between items-center">
                   <span>Disk Usage</span>
                   <div className="flex items-center gap-2">
-                    <div className="w-32 bg-gray-200 rounded-full h-2.5">
+                    <div className="w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
                       <div 
-                        className="bg-yellow-600 h-2.5 rounded-full" 
+                        className="bg-yellow-600 h-2.5 rounded-full transition-all duration-500 ease-in-out" 
                         style={{ width: stats?.system?.disk || "0%" }} 
                       ></div>
                     </div>

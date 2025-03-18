@@ -1,4 +1,3 @@
-
 // Type definitions for Ansible data structures
 
 export interface DashboardStats {
@@ -55,12 +54,13 @@ export interface Host {
 }
 
 // API base URL - connects to our Express server
-// Use relative URL to work in both development and production environments
-const API_BASE_URL = '/api';
+// Use window.location to dynamically determine the API URL
+const API_BASE_URL = `${window.location.protocol}//${window.location.hostname}${window.location.port ? ':' + window.location.port : ''}/api`;
 
 // Helper for API requests
 async function apiRequest<T>(endpoint: string, options?: RequestInit): Promise<T> {
   try {
+    console.log(`Making API request to: ${API_BASE_URL}${endpoint}`);
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
       // Add headers to prevent caching for real-time data
