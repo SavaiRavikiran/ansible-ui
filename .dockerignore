@@ -5,3 +5,5 @@ dist
 .github
 .gitignore
 npm-debug.log
+server-logs.txt
+server.pid

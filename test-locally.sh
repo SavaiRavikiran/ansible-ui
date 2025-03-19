@@ -33,9 +33,9 @@ ANSIBLE_INVENTORIES_DIR=${ANSIBLE_INVENTORIES_DIR:-/etc/ansible/inventories}
 ANSIBLE_ROLES_DIR=${ANSIBLE_ROLES_DIR:-/etc/ansible/roles}
 
 # Create directories if they don't exist
-mkdir -p $ANSIBLE_PLAYBOOKS_DIR
-mkdir -p $ANSIBLE_INVENTORIES_DIR
-mkdir -p $ANSIBLE_ROLES_DIR
+mkdir -p "$ANSIBLE_PLAYBOOKS_DIR"
+mkdir -p "$ANSIBLE_INVENTORIES_DIR"
+mkdir -p "$ANSIBLE_ROLES_DIR"
 
 echo -e "Using the following Ansible directories:"
 echo -e "  Playbooks: ${GREEN}$ANSIBLE_PLAYBOOKS_DIR${NC}"
@@ -48,9 +48,9 @@ echo -e "The server will start in the background. Press Ctrl+C to stop it."
 echo -e "Server logs will be saved to server-logs.txt"
 
 # Export environment variables
-export ANSIBLE_PLAYBOOKS_DIR=$ANSIBLE_PLAYBOOKS_DIR
-export ANSIBLE_INVENTORIES_DIR=$ANSIBLE_INVENTORIES_DIR
-export ANSIBLE_ROLES_DIR=$ANSIBLE_ROLES_DIR
+export ANSIBLE_PLAYBOOKS_DIR="$ANSIBLE_PLAYBOOKS_DIR"
+export ANSIBLE_INVENTORIES_DIR="$ANSIBLE_INVENTORIES_DIR"
+export ANSIBLE_ROLES_DIR="$ANSIBLE_ROLES_DIR"
 
 # Check SQLite3 is installed
 if ! command -v sqlite3 &> /dev/null; then
