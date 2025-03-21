@@ -53,6 +53,12 @@ export interface Host {
   variables: Record<string, string>;
 }
 
+// New type definitions for configurations
+export interface Configuration {
+  type: 'general' | 'connection' | 'custom';
+  settings: Record<string, any>;
+}
+
 // API base URL - connects to our Express server
 // Use window.location to dynamically determine the API URL
 const API_BASE_URL = `${window.location.protocol}//${window.location.hostname}${window.location.port ? ':' + window.location.port : ''}/api`;
@@ -414,5 +420,50 @@ export async function executePlaybook(playbookId: string, inventoryId: string): 
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ playbookId, inventoryId }),
+  });
+}
+
+// New API functions for configuration and server integration
+export async function saveConfiguration(config: Configuration): Promise<{ success: boolean }> {
+  return await apiRequest<{ success: boolean }>('/configuration', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(config),
+  });
+}
+
+export async function getConfiguration(type: string): Promise<Record<string, any>> {
+  return await apiRequest<Record<string, any>>(`/configuration/${type}`);
+}
+
+export async function testServerConnection(serverDetails: Record<string, any>): Promise<{ success: boolean, message: string }> {
+  return await apiRequest<{ success: boolean, message: string }>('/test-connection', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(serverDetails),
+  });
+}
+
+export async function exportToLocal(data: any, type: string): Promise<{ success: boolean, path: string }> {
+  return await apiRequest<{ success: boolean, path: string }>('/export-to-local', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ data, type }),
+  });
+}
+
+export async function importFromLocal(type: string, path?: string): Promise<any> {
+  return await apiRequest<any>('/import-from-local', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ type, path }),
   });
 }

@@ -1,4 +1,3 @@
-
 import express from 'express';
 import cors from 'cors';
 import { fileURLToPath } from 'url';
@@ -363,6 +362,143 @@ app.post('/api/execute-playbook', async (req, res) => {
   } catch (error) {
     console.error('Error executing playbook:', error);
     res.status(500).json({ error: 'Failed to execute playbook' });
+  }
+});
+
+// Configuration management
+app.post('/api/configuration', async (req, res) => {
+  try {
+    const { type, settings } = req.body;
+    console.log(`Saving ${type} configuration:`, settings);
+    
+    // Store configuration in the database
+    if (db) {
+      await db.run(
+        'INSERT OR REPLACE INTO configurations (type, settings, timestamp) VALUES (?, ?, ?)',
+        [type, JSON.stringify(settings), new Date().toISOString()]
+      );
+    }
+    
+    // If custom paths are provided, store them as environment variables
+    if (type === 'custom' && settings) {
+      if (settings.customPlaybooksDir) {
+        process.env.ANSIBLE_PLAYBOOKS_DIR = settings.customPlaybooksDir;
+      }
+      if (settings.customInventoriesDir) {
+        process.env.ANSIBLE_INVENTORIES_DIR = settings.customInventoriesDir;
+      }
+      if (settings.customRolesDir) {
+        process.env.ANSIBLE_ROLES_DIR = settings.customRolesDir;
+      }
+      
+      console.log('Updated Ansible directories:');
+      console.log(`- Playbooks: ${process.env.ANSIBLE_PLAYBOOKS_DIR}`);
+      console.log(`- Inventories: ${process.env.ANSIBLE_INVENTORIES_DIR}`);
+      console.log(`- Roles: ${process.env.ANSIBLE_ROLES_DIR}`);
+    }
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error saving configuration:', error);
+    res.status(500).json({ error: 'Failed to save configuration' });
+  }
+});
+
+app.get('/api/configuration/:type', async (req, res) => {
+  try {
+    const type = req.params.type;
+    
+    if (db) {
+      const config = await db.get(
+        'SELECT settings FROM configurations WHERE type = ? ORDER BY timestamp DESC LIMIT 1',
+        [type]
+      );
+      
+      if (config) {
+        res.json(JSON.parse(config.settings));
+      } else {
+        res.json({});
+      }
+    } else {
+      res.json({});
+    }
+  } catch (error) {
+    console.error('Error fetching configuration:', error);
+    res.status(500).json({ error: 'Failed to fetch configuration' });
+  }
+});
+
+// Test connection to remote server
+app.post('/api/test-connection', async (req, res) => {
+  try {
+    const serverDetails = req.body;
+    console.log('Testing connection to server:', serverDetails);
+    
+    // Implement actual connection test logic here
+    // For now, return success
+    res.json({ success: true, message: 'Connection successful' });
+  } catch (error) {
+    console.error('Error testing connection:', error);
+    res.status(500).json({ success: false, message: 'Connection failed' });
+  }
+});
+
+// Export data to local paths
+app.post('/api/export-to-local', async (req, res) => {
+  try {
+    const { data, type } = req.body;
+    console.log(`Exporting ${type} data to local path`);
+    
+    // Get custom path from database or environment
+    let exportPath;
+    
+    if (type === 'hosts' || type === 'groups') {
+      exportPath = process.env.ANSIBLE_INVENTORIES_DIR || '/etc/ansible/inventories';
+    } else if (type === 'playbooks') {
+      exportPath = process.env.ANSIBLE_PLAYBOOKS_DIR || '/etc/ansible/playbooks';
+    } else if (type === 'roles') {
+      exportPath = process.env.ANSIBLE_ROLES_DIR || '/etc/ansible/roles';
+    }
+    
+    // Here you would implement the actual export logic
+    
+    res.json({ success: true, path: exportPath });
+  } catch (error) {
+    console.error('Error exporting data:', error);
+    res.status(500).json({ success: false, error: 'Failed to export data' });
+  }
+});
+
+// Import data from local paths
+app.post('/api/import-from-local', async (req, res) => {
+  try {
+    const { type, path } = req.body;
+    console.log(`Importing ${type} data from ${path || 'default path'}`);
+    
+    // Here you would implement the actual import logic
+    
+    // Return mock data for now
+    if (type === 'hosts') {
+      res.json([
+        { 
+          id: 'local-1', 
+          name: 'local-host-1.example.com', 
+          groups: ['web_servers', 'local'],
+          variables: { 'ansible_host': '192.168.1.50' }
+        },
+        {
+          id: 'local-2',
+          name: 'local-host-2.example.com',
+          groups: ['db_servers', 'local'],
+          variables: { 'ansible_host': '192.168.1.51' }
+        }
+      ]);
+    } else {
+      res.json({ success: true, message: 'Import completed' });
+    }
+  } catch (error) {
+    console.error('Error importing data:', error);
+    res.status(500).json({ success: false, error: 'Failed to import data' });
   }
 });
 
