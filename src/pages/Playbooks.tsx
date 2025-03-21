@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { PlaybookExecutionLogs } from "@/components/playbooks/PlaybookExecutionLogs";
 
 export default function Playbooks() {
   const [selectedPlaybook, setSelectedPlaybook] = useState<Playbook | null>(null);
@@ -19,6 +20,7 @@ export default function Playbooks() {
   const [isRunning, setIsRunning] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [selectedInventory, setSelectedInventory] = useState<string>("");
+  const [showExecutionLogs, setShowExecutionLogs] = useState(false);
   const [newPlaybook, setNewPlaybook] = useState<Partial<Playbook>>({
     name: '',
     description: '',
@@ -112,17 +114,12 @@ export default function Playbooks() {
     if (!selectedPlaybook || !selectedInventory) return;
     
     setIsRunning(false);
+    setShowExecutionLogs(true);
     
     try {
       toast.loading(`Running ${selectedPlaybook.name} with inventory ${selectedInventory}`);
       
       const result = await executePlaybook(selectedPlaybook.id, selectedInventory);
-      
-      if (result.status === 'success') {
-        toast.success(`Playbook ${selectedPlaybook.name} completed successfully`);
-      } else {
-        toast.error(`Playbook ${selectedPlaybook.name} failed`);
-      }
       
       // Refresh dashboard data to show the new run
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
@@ -197,6 +194,17 @@ export default function Playbooks() {
               )}
             </TableBody>
           </Table>
+        </div>
+      )}
+
+      {/* Execution Logs */}
+      {showExecutionLogs && selectedPlaybook && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <PlaybookExecutionLogs 
+            playbook={selectedPlaybook} 
+            inventoryId={selectedInventory} 
+            onClose={() => setShowExecutionLogs(false)} 
+          />
         </div>
       )}
 

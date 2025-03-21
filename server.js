@@ -365,6 +365,53 @@ app.post('/api/execute-playbook', async (req, res) => {
   }
 });
 
+// New endpoint to stream playbook execution logs
+app.get('/api/execution-logs/:executionId', (req, res) => {
+  const executionId = req.params.executionId;
+  
+  // Set up SSE (Server-Sent Events)
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  
+  // Mock log generation for demo purposes
+  // In production, you'd tail the actual Ansible log file
+  let logIndex = 0;
+  const mockLogs = [
+    "PLAY [Example Playbook] ********************************************************",
+    "TASK [Gathering Facts] *********************************************************",
+    "ok: [server1.example.com]",
+    "ok: [server2.example.com]",
+    "TASK [Install required packages] ***********************************************",
+    "changed: [server1.example.com]",
+    "changed: [server2.example.com]",
+    "TASK [Start services] **********************************************************",
+    "changed: [server1.example.com]",
+    "changed: [server2.example.com]",
+    "PLAY RECAP *********************************************************************",
+    "server1.example.com : ok=3 changed=2 unreachable=0 failed=0 skipped=0",
+    "server2.example.com : ok=3 changed=2 unreachable=0 failed=0 skipped=0"
+  ];
+  
+  // Send logs at intervals
+  const intervalId = setInterval(() => {
+    if (logIndex < mockLogs.length) {
+      res.write(`data: ${JSON.stringify({ log: mockLogs[logIndex] })}\n\n`);
+      logIndex++;
+    } else {
+      res.write(`data: ${JSON.stringify({ complete: true })}\n\n`);
+      clearInterval(intervalId);
+      res.end();
+    }
+  }, 1000);
+  
+  // Handle client disconnect
+  req.on('close', () => {
+    clearInterval(intervalId);
+    res.end();
+  });
+});
+
 // Configuration management
 app.post('/api/configuration', async (req, res) => {
   try {
@@ -504,6 +551,71 @@ app.post('/api/import-from-local', async (req, res) => {
 
 // Serve static files from the React app
 app.use(express.static('dist'));
+
+// Add a health check endpoint
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'healthy' });
+});
+
+// Task Templates API endpoints
+app.get('/api/task-templates', (req, res) => {
+  // In a real app, this would come from the database
+  const mockTemplates = [
+    {
+      id: "1",
+      name: "Deploy Web Application",
+      description: "Deploy the web application to production servers",
+      type: "deploy",
+      content: "---\n- name: Deploy Web Application\n  hosts: web_servers\n  tasks:\n    - name: Pull latest code\n      git:\n        repo: https://github.com/company/webapp\n        dest: /var/www/html\n\n    - name: Restart web service\n      service:\n        name: nginx\n        state: restarted",
+      lastRun: "2023-09-15T14:30:00Z",
+      status: "success",
+      runs: 24
+    },
+    {
+      id: "2",
+      name: "Build Frontend Assets",
+      description: "Build and minify frontend assets for production",
+      type: "build",
+      content: "---\n- name: Build Frontend\n  hosts: build_servers\n  tasks:\n    - name: Install dependencies\n      npm:\n        path: /var/repo/frontend\n        state: present\n\n    - name: Build assets\n      command:\n        cmd: npm run build\n        chdir: /var/repo/frontend",
+      lastRun: "2023-09-10T11:20:00Z",
+      status: "failed",
+      runs: 18
+    },
+    {
+      id: "3",
+      name: "Database Backup",
+      description: "Create a backup of the production database",
+      type: "backup",
+      content: "---\n- name: Backup Database\n  hosts: db_servers\n  tasks:\n    - name: Create backup directory\n      file:\n        path: /var/backups/db\n        state: directory\n\n    - name: Run pg_dump\n      command:\n        cmd: pg_dump -U postgres -F c main_db > /var/backups/db/main_db_$(date +%Y%m%d).dump",
+      lastRun: "2023-09-14T23:00:00Z",
+      status: "success",
+      runs: 56
+    },
+  ];
+  
+  res.json(mockTemplates);
+});
+
+app.post('/api/task-templates', (req, res) => {
+  // In a real app, this would save to the database
+  const template = req.body;
+  template.id = Math.random().toString(36).substring(2, 10);
+  template.lastRun = new Date().toISOString();
+  template.status = "success";
+  template.runs = 0;
+  
+  res.json(template);
+});
+
+app.post('/api/task-templates/:id/run', (req, res) => {
+  // In a real app, this would execute the template
+  const templateId = req.params.id;
+  
+  res.json({
+    executionId: Math.random().toString(36).substring(2, 10),
+    status: "running"
+  });
+});
 
 // Catch-all route to return the main index.html for client-side routing
 app.get('*', (req, res) => {
