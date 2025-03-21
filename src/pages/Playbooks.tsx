@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { fetchPlaybooks, Playbook, executePlaybook, fetchInventories, savePlaybook } from "@/lib/api";
@@ -79,7 +78,6 @@ export default function Playbooks() {
     }
     
     try {
-      // Ensure the name has .yml extension if not already present
       let name = newPlaybook.name;
       if (!name.endsWith('.yml') && !name.endsWith('.yaml')) {
         name = `${name}.yml`;
@@ -121,7 +119,6 @@ export default function Playbooks() {
       
       const result = await executePlaybook(selectedPlaybook.id, selectedInventory);
       
-      // Refresh dashboard data to show the new run
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
     } catch (error) {
       toast.error("An error occurred while executing the playbook");
@@ -197,7 +194,6 @@ export default function Playbooks() {
         </div>
       )}
 
-      {/* Execution Logs */}
       {showExecutionLogs && selectedPlaybook && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <PlaybookExecutionLogs 
@@ -208,7 +204,6 @@ export default function Playbooks() {
         </div>
       )}
 
-      {/* Create Playbook Dialog */}
       <Dialog open={isCreating} onOpenChange={setIsCreating}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
@@ -259,7 +254,6 @@ export default function Playbooks() {
         </DialogContent>
       </Dialog>
 
-      {/* Editor Sheet */}
       <Sheet open={isEditing} onOpenChange={setIsEditing}>
         <SheetContent className="sm:max-w-2xl w-[90vw] overflow-y-auto" side="right">
           <SheetHeader>
@@ -312,7 +306,6 @@ export default function Playbooks() {
         </SheetContent>
       </Sheet>
 
-      {/* Run Playbook Sheet */}
       <Sheet open={isRunning} onOpenChange={setIsRunning}>
         <SheetContent className="sm:max-w-md">
           <SheetHeader>
