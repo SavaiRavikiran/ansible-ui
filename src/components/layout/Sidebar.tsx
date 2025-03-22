@@ -1,5 +1,5 @@
 
-import { Home, Book, Server, Users, Settings, FileText, FileSpreadsheet, Layout, CalendarClock, FileOutput, ChevronLeft } from "lucide-react";
+import { Home, Book, Server, Users, Settings, FileText, FileSpreadsheet, Layout, CalendarClock, FileOutput, ChevronLeft, Terminal, Variable, FileArchive, Shield, CloudLightning, Bell, Save } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -99,6 +99,39 @@ export function Sidebar({ className, collapsed = false, onToggleCollapse }: Side
                 </Button>
               )}
             </NavLink>
+            <NavLink to="/variables">
+              {({ isActive }) => (
+                <Button
+                  variant={isActive ? "secondary" : "ghost"}
+                  className={cn("w-full", collapsed ? "justify-center px-0" : "justify-start")}
+                >
+                  <Variable className={cn("h-4 w-4", collapsed ? "mr-0" : "mr-2")} />
+                  {!collapsed && <span>Variables</span>}
+                </Button>
+              )}
+            </NavLink>
+            <NavLink to="/files">
+              {({ isActive }) => (
+                <Button
+                  variant={isActive ? "secondary" : "ghost"}
+                  className={cn("w-full", collapsed ? "justify-center px-0" : "justify-start")}
+                >
+                  <FileArchive className={cn("h-4 w-4", collapsed ? "mr-0" : "mr-2")} />
+                  {!collapsed && <span>Files & Templates</span>}
+                </Button>
+              )}
+            </NavLink>
+            <NavLink to="/config-editor">
+              {({ isActive }) => (
+                <Button
+                  variant={isActive ? "secondary" : "ghost"}
+                  className={cn("w-full", collapsed ? "justify-center px-0" : "justify-start")}
+                >
+                  <Terminal className={cn("h-4 w-4", collapsed ? "mr-0" : "mr-2")} />
+                  {!collapsed && <span>Ansible Config</span>}
+                </Button>
+              )}
+            </NavLink>
             <NavLink to="/job-scheduler">
               {({ isActive }) => (
                 <Button
@@ -126,9 +159,64 @@ export function Sidebar({ className, collapsed = false, onToggleCollapse }: Side
         
         <div className="px-3 py-2">
           <h2 className={cn("mb-2 px-4 text-lg font-semibold tracking-tight", collapsed && "hidden")}>
-            Administration
+            Enterprise Features
           </h2>
           <div className="space-y-1">
+            <NavLink to="/user-management">
+              {({ isActive }) => (
+                <Button
+                  variant={isActive ? "secondary" : "ghost"}
+                  className={cn("w-full", collapsed ? "justify-center px-0" : "justify-start")}
+                >
+                  <Users className={cn("h-4 w-4", collapsed ? "mr-0" : "mr-2")} />
+                  {!collapsed && <span>User Management</span>}
+                </Button>
+              )}
+            </NavLink>
+            <NavLink to="/secrets">
+              {({ isActive }) => (
+                <Button
+                  variant={isActive ? "secondary" : "ghost"}
+                  className={cn("w-full", collapsed ? "justify-center px-0" : "justify-start")}
+                >
+                  <Shield className={cn("h-4 w-4", collapsed ? "mr-0" : "mr-2")} />
+                  {!collapsed && <span>Secrets & Vault</span>}
+                </Button>
+              )}
+            </NavLink>
+            <NavLink to="/cloud-inventory">
+              {({ isActive }) => (
+                <Button
+                  variant={isActive ? "secondary" : "ghost"}
+                  className={cn("w-full", collapsed ? "justify-center px-0" : "justify-start")}
+                >
+                  <CloudLightning className={cn("h-4 w-4", collapsed ? "mr-0" : "mr-2")} />
+                  {!collapsed && <span>Cloud Inventory</span>}
+                </Button>
+              )}
+            </NavLink>
+            <NavLink to="/notifications">
+              {({ isActive }) => (
+                <Button
+                  variant={isActive ? "secondary" : "ghost"}
+                  className={cn("w-full", collapsed ? "justify-center px-0" : "justify-start")}
+                >
+                  <Bell className={cn("h-4 w-4", collapsed ? "mr-0" : "mr-2")} />
+                  {!collapsed && <span>Notifications</span>}
+                </Button>
+              )}
+            </NavLink>
+            <NavLink to="/backup">
+              {({ isActive }) => (
+                <Button
+                  variant={isActive ? "secondary" : "ghost"}
+                  className={cn("w-full", collapsed ? "justify-center px-0" : "justify-start")}
+                >
+                  <Save className={cn("h-4 w-4", collapsed ? "mr-0" : "mr-2")} />
+                  {!collapsed && <span>Backup & Recovery</span>}
+                </Button>
+              )}
+            </NavLink>
             <NavLink to="/settings">
               {({ isActive }) => (
                 <Button
