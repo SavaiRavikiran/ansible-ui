@@ -11,6 +11,8 @@ import { toast } from "@/hooks/use-toast";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
 import { 
   ArrowDown, ArrowUp, Calendar, Download, Upload, Clock, Settings, Trash, RotateCw, 
   AlertCircle, CheckCircle2, Plus, Edit, FileText, HardDrive, Database, Server
@@ -65,7 +67,7 @@ const Backup = () => {
             source: "/var/www/html",
             destination: "s3://backup-bucket/web-server",
             schedule: "0 0 * * *",
-            status: "active",
+            status: "active" as const,
             lastRun: "2023-10-15T00:00:00Z",
             nextRun: "2023-10-16T00:00:00Z",
             progress: 75,
@@ -77,7 +79,7 @@ const Backup = () => {
             source: "postgres://user:password@host:port/database",
             destination: "gs://backup-bucket/database",
             schedule: "0 6 * * *",
-            status: "completed",
+            status: "completed" as const,
             lastRun: "2023-10-15T06:00:00Z",
             nextRun: "2023-10-16T06:00:00Z",
             progress: 100,
@@ -89,7 +91,7 @@ const Backup = () => {
             source: "/home/user/documents",
             destination: "/mnt/backup/documents",
             schedule: "0 12 * * *",
-            status: "failed",
+            status: "failed" as const,
             lastRun: "2023-10-15T12:00:00Z",
             nextRun: "2023-10-16T12:00:00Z",
             progress: 0,
@@ -101,7 +103,7 @@ const Backup = () => {
             source: "/opt/data",
             destination: "sftp://backup-server/data",
             schedule: "0 18 * * *",
-            status: "active",
+            status: "active" as const,
             lastRun: "2023-10-15T18:00:00Z",
             nextRun: "2023-10-16T18:00:00Z",
             progress: 25,
@@ -113,7 +115,7 @@ const Backup = () => {
             source: "/etc",
             destination: "azure://backup-container/config",
             schedule: "0 0 1 * *",
-            status: "inactive",
+            status: "inactive" as const,
             lastRun: null,
             nextRun: "2023-11-01T00:00:00Z",
             progress: 0,
@@ -277,7 +279,7 @@ const Backup = () => {
         if (job.id === jobId) {
           return {
             ...job,
-            status: "active",
+            status: "active" as const,
             lastRun: new Date().toISOString(),
             progress: 50,
             log: "Backup job started",
@@ -316,7 +318,7 @@ const Backup = () => {
         if (job.id === jobId) {
           return {
             ...job,
-            status: "inactive",
+            status: "inactive" as const,
             progress: 0,
             log: "Backup job cancelled",
           };

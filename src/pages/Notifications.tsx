@@ -10,6 +10,9 @@ import { toast } from "@/hooks/use-toast";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { 
   Bell, Settings, Plus, Trash, Edit, Mail, MessageSquare, Webhook, Search, 
   Filter, Download, CheckCircle, AlertCircle, Clock, RefreshCw, Send, 
@@ -97,7 +100,7 @@ const Notifications = () => {
             enabled: true,
             events: ["playbook_start", "playbook_complete", "playbook_error", "system_update"],
             lastSent: "2023-10-15T09:30:00Z",
-            lastStatus: "success"
+            lastStatus: "success" as const
           },
           {
             id: "2",
@@ -112,7 +115,7 @@ const Notifications = () => {
             enabled: true,
             events: ["playbook_error", "system_critical", "security_alert"],
             lastSent: "2023-10-14T16:45:00Z",
-            lastStatus: "success"
+            lastStatus: "success" as const
           },
           {
             id: "3",
@@ -127,7 +130,7 @@ const Notifications = () => {
             enabled: false,
             events: ["playbook_complete", "playbook_error", "system_critical", "system_update"],
             lastSent: "2023-10-10T11:20:00Z",
-            lastStatus: "failed",
+            lastStatus: "failed" as const,
             lastError: "Webhook endpoint returned 403 Forbidden"
           },
           {
@@ -142,7 +145,7 @@ const Notifications = () => {
             enabled: true,
             events: ["playbook_error", "security_alert"],
             lastSent: "2023-10-13T14:10:00Z",
-            lastStatus: "success"
+            lastStatus: "success" as const
           }
         ];
         
