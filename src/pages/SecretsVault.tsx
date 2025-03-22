@@ -15,7 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { 
   Shield, Key, File, Eye, EyeOff, Plus, Trash, Edit, Search, 
-  Copy, Lock, FileLock, Share2, History, RefreshCw, KeyRound, FileText
+  Copy, Lock, FileLock, Share2, History, RefreshCw, KeyRound, FileText, ExternalLink
 } from "lucide-react";
 
 interface Secret {
@@ -1176,7 +1176,7 @@ const SecretsVault = () => {
                             Use this secret in Ansible playbooks or templates:
                           </p>
                           <div className="bg-muted p-2 rounded-md font-mono text-xs">
-                            <pre>{% raw %}{{ lookup('ansible.builtin.vault', '{selectedSecret.name}') }}{% endraw %}</pre>
+                            <pre>{`{% raw %}{{ lookup('ansible.builtin.vault', '${selectedSecret ? selectedSecret.name : "secret_name"}') }}{% endraw %}`}</pre>
                           </div>
                         </div>
                       </div>
