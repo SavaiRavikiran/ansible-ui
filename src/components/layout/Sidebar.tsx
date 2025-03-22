@@ -1,7 +1,7 @@
 
 import { cn } from "@/lib/utils";
 import { NavLink } from "react-router-dom";
-import { Server, FileCode, Folder, List, Settings, Home, ChevronLeft, ChevronRight } from "lucide-react";
+import { Server, FileCode, Folder, List, Settings, Home, ChevronLeft, ChevronRight, Code, Activity, History, Building, Wrench, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -9,9 +9,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 const navItems = [
   { href: "/", label: "Dashboard", icon: Home },
   { href: "/playbooks", label: "Playbooks", icon: FileCode },
+  { href: "/task-templates", label: "Task Templates", icon: Code },
   { href: "/inventories", label: "Inventories", icon: List },
   { href: "/roles", label: "Roles", icon: Folder },
   { href: "/hosts", label: "Hosts", icon: Server },
+  { href: "/export-logs", label: "Export Logs", icon: Download },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

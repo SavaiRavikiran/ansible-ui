@@ -1,6 +1,6 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileCode, Folder, List, Server, RefreshCw } from "lucide-react";
+import { FileCode, Folder, List, Server, RefreshCw, History, Activity, Settings, Building, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { fetchDashboardStats } from "@/lib/api";
@@ -64,10 +64,16 @@ export default function Dashboard() {
     <div className="p-6 max-w-7xl mx-auto w-full">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <Button onClick={handleRefresh} className="gap-2 hover:scale-105 transition-transform duration-200">
-          <RefreshCw className="h-4 w-4" />
-          Refresh
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" className="gap-2">
+            <Plus className="h-4 w-4" />
+            New Runner
+          </Button>
+          <Button onClick={handleRefresh} className="gap-2 hover:scale-105 transition-transform duration-200">
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -105,8 +111,8 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="mt-8 grid gap-4 md:grid-cols-2">
-        <Card className="animate-fade-in transition-all duration-300 hover:shadow-lg">
+      <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <Card className="animate-fade-in transition-all duration-300 hover:shadow-lg md:col-span-2">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle>Recent Playbook Runs</CardTitle>
@@ -153,6 +159,98 @@ export default function Dashboard() {
         </Card>
 
         <Card className="animate-fade-in transition-all duration-300 hover:shadow-lg">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-base font-medium">History</CardTitle>
+            <History className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {isLoading ? (
+                <div className="h-20 bg-muted rounded-md animate-pulse" />
+              ) : (
+                <div className="space-y-1">
+                  {['Yesterday', '2 days ago', '3 days ago'].map((date, i) => (
+                    <div key={i} className="flex items-center justify-between text-sm">
+                      <span>Playbook run #{i+1}</span>
+                      <span className="text-muted-foreground">{date}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="animate-fade-in transition-all duration-300 hover:shadow-lg">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-base font-medium">Activity</CardTitle>
+            <Activity className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {isLoading ? (
+                <div className="h-20 bg-muted rounded-md animate-pulse" />
+              ) : (
+                <div className="space-y-1">
+                  {['User login', 'Config change', 'Inventory update'].map((activity, i) => (
+                    <div key={i} className="flex items-center justify-between text-sm">
+                      <span>{activity}</span>
+                      <span className="text-muted-foreground">{i+1}h ago</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="animate-fade-in transition-all duration-300 hover:shadow-lg">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-base font-medium">Building</CardTitle>
+            <Building className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {isLoading ? (
+                <div className="h-20 bg-muted rounded-md animate-pulse" />
+              ) : (
+                <div className="space-y-1">
+                  {['Frontend', 'Backend', 'Database'].map((component, i) => (
+                    <div key={i} className="flex items-center justify-between text-sm">
+                      <span>{component}</span>
+                      <span className="text-green-500">Ready</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="animate-fade-in transition-all duration-300 hover:shadow-lg">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-base font-medium">Settings</CardTitle>
+            <Settings className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {isLoading ? (
+                <div className="h-20 bg-muted rounded-md animate-pulse" />
+              ) : (
+                <div className="space-y-1">
+                  {['System', 'Security', 'Notifications'].map((setting, i) => (
+                    <div key={i} className="flex items-center justify-between text-sm">
+                      <span>{setting}</span>
+                      <Link to="/settings" className="text-blue-500 hover:underline">Configure</Link>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="animate-fade-in transition-all duration-300 hover:shadow-lg md:col-span-2">
           <CardHeader>
             <CardTitle>System Health</CardTitle>
             <CardDescription>
