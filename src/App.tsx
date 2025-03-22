@@ -13,6 +13,7 @@ import Hosts from "./pages/Hosts";
 import Settings from "./pages/Settings";
 import TaskTemplates from "./pages/TaskTemplates";
 import ExportLogs from "./pages/ExportLogs";
+import JobScheduler from "./pages/JobScheduler";
 import NotFound from "./pages/NotFound";
 import { ThemeProvider } from "./components/theme-provider";
 
@@ -40,6 +41,7 @@ const App = () => (
               <Route path="/inventories" element={<Inventories />} />
               <Route path="/roles" element={<Roles />} />
               <Route path="/hosts" element={<Hosts />} />
+              <Route path="/job-scheduler" element={<JobScheduler />} />
               <Route path="/export-logs" element={<ExportLogs />} />
               <Route path="/settings" element={<Settings />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

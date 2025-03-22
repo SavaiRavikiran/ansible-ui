@@ -53,6 +53,21 @@ export interface Host {
   variables: Record<string, string>;
 }
 
+// New type definitions for job scheduling
+export interface ScheduledJob {
+  id: string;
+  playbookId: string;
+  inventoryId: string;
+  schedule: {
+    type: "once" | "daily" | "weekly" | "monthly";
+    time: string;
+    date?: string; // For "once" type
+    daysOfWeek?: string[]; // For "weekly" type
+    dayOfMonth?: number; // For "monthly" type
+  };
+  isEnabled: boolean;
+}
+
 // New type definitions for configurations
 export interface Configuration {
   type: 'general' | 'connection' | 'custom';
@@ -349,6 +364,47 @@ db-dev01.example.com ansible_host=192.168.3.201`
     } as unknown as T;
   }
   
+  if (endpoint === '/scheduled-jobs') {
+    if (options?.method === 'POST') {
+      // Return the posted job with an ID
+      const body = JSON.parse((options.body as string));
+      return {
+        ...body,
+        id: Math.random().toString(36).substring(2, 10),
+      } as unknown as T;
+    }
+    
+    return [
+      {
+        id: '1',
+        playbookId: '1',
+        playbookName: 'deploy-web.yml',
+        inventoryId: '1',
+        inventoryName: 'production',
+        nextRunTime: '2023-07-01T12:00:00Z',
+        schedule: {
+          type: 'daily',
+          time: '12:00',
+        },
+        isEnabled: true,
+      },
+      {
+        id: '2',
+        playbookId: '2',
+        playbookName: 'database-backup.yml',
+        inventoryId: '1',
+        inventoryName: 'production',
+        nextRunTime: '2023-07-02T00:00:00Z',
+        schedule: {
+          type: 'weekly',
+          time: '00:00',
+          daysOfWeek: ['Sunday'],
+        },
+        isEnabled: true,
+      },
+    ] as unknown as T;
+  }
+  
   return {} as T;
 }
 
@@ -465,5 +521,52 @@ export async function importFromLocal(type: string, path?: string): Promise<any>
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ type, path }),
+  });
+}
+
+// New functions for job scheduling
+export async function fetchScheduledJobs(): Promise<ScheduledJob[]> {
+  return await apiRequest<ScheduledJob[]>('/scheduled-jobs');
+}
+
+export async function schedulePlaybook(job: ScheduledJob): Promise<ScheduledJob> {
+  return await apiRequest<ScheduledJob>('/scheduled-jobs', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(job),
+  });
+}
+
+export async function updateScheduledJob(job: ScheduledJob): Promise<ScheduledJob> {
+  return await apiRequest<ScheduledJob>(`/scheduled-jobs/${job.id}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(job),
+  });
+}
+
+export async function deleteScheduledJob(jobId: string): Promise<{ success: boolean }> {
+  return await apiRequest<{ success: boolean }>(`/scheduled-jobs/${jobId}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function toggleScheduledJob(jobId: string, isEnabled: boolean): Promise<{ success: boolean }> {
+  return await apiRequest<{ success: boolean }>(`/scheduled-jobs/${jobId}/toggle`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ isEnabled }),
+  });
+}
+
+export async function runScheduledJobNow(jobId: string): Promise<{ id: string, status: string }> {
+  return await apiRequest<{ id: string, status: string }>(`/scheduled-jobs/${jobId}/run-now`, {
+    method: 'POST',
   });
 }
