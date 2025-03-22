@@ -12,7 +12,8 @@ import { toast } from "sonner";
 
 export default function ExportLogs() {
   const [logType, setLogType] = useState("playbook");
-  const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({});
+  const [startDate, setStartDate] = useState<Date | undefined>();
+  const [endDate, setEndDate] = useState<Date | undefined>();
   const [format, setFormat] = useState("json");
   const [includeSystem, setIncludeSystem] = useState(true);
   const [includeDebug, setIncludeDebug] = useState(false);
@@ -55,18 +56,16 @@ export default function ExportLogs() {
             <div className="space-y-2">
               <Label>Start Date</Label>
               <DatePicker
-                selected={dateRange.from}
-                onSelect={(date) => setDateRange(prev => ({ ...prev, from: date }))}
-                mode="single"
+                selected={startDate}
+                onSelect={setStartDate}
               />
             </div>
             
             <div className="space-y-2">
               <Label>End Date</Label>
               <DatePicker
-                selected={dateRange.to}
-                onSelect={(date) => setDateRange(prev => ({ ...prev, to: date }))}
-                mode="single"
+                selected={endDate}
+                onSelect={setEndDate}
               />
             </div>
           </div>
