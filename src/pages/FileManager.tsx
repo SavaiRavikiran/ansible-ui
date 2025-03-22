@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,10 +11,14 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { 
   FileText, Folder, File, Upload, Download, Plus, Trash, Edit, 
   Copy, FileUp, ExternalLink, FolderUp, RefreshCw, Search, FileCog
 } from "lucide-react";
+import * as fs from 'fs';
+import * as path from 'path';
+import { exec } from 'child_process';
 
 interface FileItem {
   id: string;
@@ -26,6 +29,42 @@ interface FileItem {
   lastModified: string;
   content?: string;
 }
+
+const execCommand = (cmd: string): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    exec(cmd, (error, stdout, stderr) => {
+      if (error) {
+        console.error(`Error executing command: ${error.message}`);
+        reject(error);
+        return;
+      }
+      if (stderr) {
+        console.warn(`Command stderr: ${stderr}`);
+      }
+      resolve(stdout.trim());
+    });
+  });
+};
+
+const readFileAsync = async (filePath: string): Promise<string> => {
+  try {
+    return await fs.promises.readFile(filePath, 'utf8');
+  } catch (error) {
+    console.error(`Error reading file ${filePath}:`, error);
+    return '';
+  }
+};
+
+const writeFileAsync = async (filePath: string, content: string): Promise<boolean> => {
+  try {
+    await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.promises.writeFile(filePath, content, 'utf8');
+    return true;
+  } catch (error) {
+    console.error(`Error writing file ${filePath}:`, error);
+    return false;
+  }
+};
 
 const FileManager = () => {
   const [currentPath, setCurrentPath] = useState<string>("/etc/ansible");
@@ -42,12 +81,11 @@ const FileManager = () => {
   const [fileType, setFileType] = useState<string>("text");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Load items for the current path
     fetchItems(currentPath);
     
-    // Update breadcrumbs
     const parts = currentPath.split('/').filter(Boolean);
     setBreadcrumbs(['/', ...parts]);
   }, [currentPath]);
@@ -55,77 +93,70 @@ const FileManager = () => {
   const fetchItems = async (path: string) => {
     try {
       setLoading(true);
+      setError(null);
       
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 800));
+      if (!fs.existsSync(path)) {
+        setError(`Directory does not exist: ${path}`);
+        setItems([]);
+        setLoading(false);
+        return;
+      }
       
-      // Mock data
-      const mockItems: FileItem[] = [
-        {
-          id: "1",
-          name: "playbooks",
-          type: "folder",
-          path: `${path}/playbooks`,
-          lastModified: "2023-10-15T12:30:00Z"
-        },
-        {
-          id: "2",
-          name: "inventories",
-          type: "folder",
-          path: `${path}/inventories`,
-          lastModified: "2023-10-14T09:45:00Z"
-        },
-        {
-          id: "3",
-          name: "roles",
-          type: "folder",
-          path: `${path}/roles`,
-          lastModified: "2023-10-13T15:20:00Z"
-        },
-        {
-          id: "4",
-          name: "ansible.cfg",
-          type: "file",
-          path: `${path}/ansible.cfg`,
-          size: "2.4 KB",
-          lastModified: "2023-10-12T11:10:00Z",
-          content: "[defaults]\ninventory = ./inventory\nremote_user = ansible\nask_pass = false\nroles_path = ./roles\nhost_key_checking = false\n\n[privilege_escalation]\nbecome = true\nbecome_method = sudo\nbecome_user = root\nbecome_ask_pass = false"
-        },
-        {
-          id: "5",
-          name: "hosts",
-          type: "file",
-          path: `${path}/hosts`,
-          size: "1.8 KB",
-          lastModified: "2023-10-11T14:35:00Z",
-          content: "[webservers]\nweb01.example.com ansible_host=192.168.1.101\nweb02.example.com ansible_host=192.168.1.102\n\n[dbservers]\ndb01.example.com ansible_host=192.168.1.201\ndb02.example.com ansible_host=192.168.1.202"
-        },
-        {
-          id: "6",
-          name: "nginx_template.j2",
-          type: "template",
-          path: `${path}/nginx_template.j2`,
-          size: "3.2 KB",
-          lastModified: "2023-10-10T16:40:00Z",
-          content: "server {\n    listen {{ http_port }};\n    server_name {{ server_name }};\n\n    root {{ document_root }};\n    index index.html index.htm;\n\n    location / {\n        try_files $uri $uri/ =404;\n    }\n}"
+      const files = await fs.promises.readdir(path);
+      const fileItems: FileItem[] = [];
+      
+      for (const file of files) {
+        try {
+          const filePath = `${path}/${file}`;
+          const stats = await fs.promises.stat(filePath);
+          
+          if (searchQuery && !file.toLowerCase().includes(searchQuery.toLowerCase())) {
+            continue;
+          }
+          
+          if (stats.isDirectory()) {
+            fileItems.push({
+              id: Buffer.from(filePath).toString('base64'),
+              name: file,
+              type: 'folder',
+              path: filePath,
+              lastModified: stats.mtime.toISOString()
+            });
+          } else {
+            const isTemplate = file.endsWith('.j2') || file.endsWith('.template') || file.endsWith('.tpl');
+            
+            fileItems.push({
+              id: Buffer.from(filePath).toString('base64'),
+              name: file,
+              type: isTemplate ? 'template' : 'file',
+              path: filePath,
+              size: formatFileSize(stats.size),
+              lastModified: stats.mtime.toISOString()
+            });
+          }
+        } catch (fileError) {
+          console.error(`Error processing file ${file}:`, fileError);
         }
-      ];
+      }
       
-      // Filter by search query if provided
-      const filteredItems = searchQuery 
-        ? mockItems.filter(item => item.name.toLowerCase().includes(searchQuery.toLowerCase()))
-        : mockItems;
+      fileItems.sort((a, b) => {
+        if (a.type === 'folder' && b.type !== 'folder') return -1;
+        if (a.type !== 'folder' && b.type === 'folder') return 1;
+        return a.name.localeCompare(b.name);
+      });
       
-      setItems(filteredItems);
+      setItems(fileItems);
       setSelectedItem(null);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching items:', error);
+      setError(`Failed to load directory: ${error.message}`);
       toast({
         variant: "destructive",
         title: "Error",
         description: "Failed to load files and directories"
       });
+      setItems([]);
       setLoading(false);
     }
   };
@@ -143,13 +174,22 @@ const FileManager = () => {
     }
   };
 
-  const openItem = (item: FileItem) => {
+  const openItem = async (item: FileItem) => {
     if (item.type === 'folder') {
       navigateTo(item.path);
     } else {
-      setSelectedItem(item);
-      if (item.content) {
-        setFileContent(item.content);
+      try {
+        const content = await readFileAsync(item.path);
+        const updatedItem = { ...item, content };
+        setSelectedItem(updatedItem);
+        setFileContent(content);
+      } catch (error) {
+        console.error('Error reading file:', error);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: `Failed to read file: ${error.message}`
+        });
       }
     }
   };
@@ -158,40 +198,43 @@ const FileManager = () => {
     if (fileInputRef.current?.files?.length) {
       const file = fileInputRef.current.files[0];
       
-      // Simulate file upload
       setLoading(true);
       
       try {
-        // Read file content
         const content = await readFileAsText(file);
         
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        const destPath = `${currentPath}/${file.name}`;
         
-        // Create new file item
-        const newItem: FileItem = {
-          id: Math.random().toString(36).substring(7),
-          name: file.name,
-          type: file.name.endsWith('.j2') ? 'template' : 'file',
-          path: `${currentPath}/${file.name}`,
-          size: formatFileSize(file.size),
-          lastModified: new Date().toISOString(),
-          content
-        };
+        const success = await writeFileAsync(destPath, content);
         
-        // Add to items
-        setItems([...items, newItem]);
-        
-        toast({
-          title: "Success",
-          description: `File ${file.name} uploaded successfully`,
-        });
+        if (success) {
+          const stats = await fs.promises.stat(destPath);
+          
+          const newItem: FileItem = {
+            id: Buffer.from(destPath).toString('base64'),
+            name: file.name,
+            type: file.name.endsWith('.j2') || file.name.endsWith('.template') || file.name.endsWith('.tpl') ? 'template' : 'file',
+            path: destPath,
+            size: formatFileSize(file.size),
+            lastModified: stats.mtime.toISOString(),
+            content
+          };
+          
+          setItems([...items, newItem]);
+          
+          toast({
+            title: "Success",
+            description: `File ${file.name} uploaded successfully`,
+          });
+        } else {
+          throw new Error('Failed to write file');
+        }
       } catch (error) {
         console.error('Error uploading file:', error);
         toast({
           variant: "destructive",
           title: "Error",
-          description: "Failed to upload file"
+          description: `Failed to upload file: ${error.message}`
         });
       } finally {
         setLoading(false);
@@ -224,19 +267,19 @@ const FileManager = () => {
     try {
       setLoading(true);
       
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 800));
+      const dirPath = `${currentPath}/${newItemName}`;
+      await fs.promises.mkdir(dirPath, { recursive: true });
       
-      // Create new folder item
+      const stats = await fs.promises.stat(dirPath);
+      
       const newItem: FileItem = {
-        id: Math.random().toString(36).substring(7),
+        id: Buffer.from(dirPath).toString('base64'),
         name: newItemName,
         type: 'folder',
-        path: `${currentPath}/${newItemName}`,
-        lastModified: new Date().toISOString()
+        path: dirPath,
+        lastModified: stats.mtime.toISOString()
       };
       
-      // Add to items
       setItems([...items, newItem]);
       
       toast({
@@ -251,7 +294,7 @@ const FileManager = () => {
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to create folder"
+        description: `Failed to create folder: ${error.message}`
       });
     } finally {
       setLoading(false);
@@ -264,36 +307,40 @@ const FileManager = () => {
     try {
       setLoading(true);
       
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 800));
+      const filePath = `${currentPath}/${newItemName}`;
+      const success = await writeFileAsync(filePath, '');
       
-      // Create new file item
-      const newItem: FileItem = {
-        id: Math.random().toString(36).substring(7),
-        name: newItemName,
-        type: newItemName.endsWith('.j2') ? 'template' : 'file',
-        path: `${currentPath}/${newItemName}`,
-        size: '0 B',
-        lastModified: new Date().toISOString(),
-        content: ''
-      };
-      
-      // Add to items
-      setItems([...items, newItem]);
-      
-      toast({
-        title: "Success",
-        description: `File ${newItemName} created successfully`,
-      });
-      
-      setNewItemName("");
-      setNewFileDialogOpen(false);
+      if (success) {
+        const stats = await fs.promises.stat(filePath);
+        
+        const newItem: FileItem = {
+          id: Buffer.from(filePath).toString('base64'),
+          name: newItemName,
+          type: newItemName.endsWith('.j2') || newItemName.endsWith('.template') || newItemName.endsWith('.tpl') ? 'template' : 'file',
+          path: filePath,
+          size: '0 B',
+          lastModified: stats.mtime.toISOString(),
+          content: ''
+        };
+        
+        setItems([...items, newItem]);
+        
+        toast({
+          title: "Success",
+          description: `File ${newItemName} created successfully`,
+        });
+        
+        setNewItemName("");
+        setNewFileDialogOpen(false);
+      } else {
+        throw new Error('Failed to create file');
+      }
     } catch (error) {
       console.error('Error creating file:', error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to create file"
+        description: `Failed to create file: ${error.message}`
       });
     } finally {
       setLoading(false);
@@ -306,35 +353,41 @@ const FileManager = () => {
     try {
       setLoading(true);
       
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const success = await writeFileAsync(selectedItem.path, fileContent);
       
-      // Update the content of the selected item
-      const updatedItems = items.map(item => {
-        if (item.id === selectedItem.id) {
-          return {
-            ...item,
-            content: fileContent,
-            lastModified: new Date().toISOString()
-          };
-        }
-        return item;
-      });
-      
-      setItems(updatedItems);
-      
-      toast({
-        title: "Success",
-        description: `File ${selectedItem.name} saved successfully`,
-      });
-      
-      setEditDialogOpen(false);
+      if (success) {
+        const updatedItem = {
+          ...selectedItem,
+          content: fileContent,
+          lastModified: new Date().toISOString()
+        };
+        
+        setSelectedItem(updatedItem);
+        
+        const updatedItems = items.map(item => {
+          if (item.id === selectedItem.id) {
+            return updatedItem;
+          }
+          return item;
+        });
+        
+        setItems(updatedItems);
+        
+        toast({
+          title: "Success",
+          description: `File ${selectedItem.name} saved successfully`,
+        });
+        
+        setEditDialogOpen(false);
+      } else {
+        throw new Error('Failed to save file');
+      }
     } catch (error) {
       console.error('Error saving file:', error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to save file"
+        description: `Failed to save file: ${error.message}`
       });
     } finally {
       setLoading(false);
@@ -366,10 +419,12 @@ const FileManager = () => {
     try {
       setLoading(true);
       
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 800));
+      if (selectedItem.type === 'folder') {
+        await fs.promises.rmdir(selectedItem.path, { recursive: true });
+      } else {
+        await fs.promises.unlink(selectedItem.path);
+      }
       
-      // Remove the item from the list
       const updatedItems = items.filter(item => item.id !== selectedItem.id);
       setItems(updatedItems);
       
@@ -384,7 +439,7 @@ const FileManager = () => {
       toast({
         variant: "destructive",
         title: "Error",
-        description: `Failed to delete ${selectedItem.type === 'folder' ? 'folder' : 'file'}`
+        description: `Failed to delete ${selectedItem.type === 'folder' ? 'folder' : 'file'}: ${error.message}`
       });
     } finally {
       setLoading(false);
@@ -495,6 +550,12 @@ const FileManager = () => {
               
               <ScrollArea className="h-[400px]">
                 <div className="space-y-1">
+                  {error && (
+                    <div className="text-center py-4 text-destructive">
+                      {error}
+                    </div>
+                  )}
+                  
                   {items.map((item) => (
                     <Button 
                       key={item.id}
@@ -507,7 +568,7 @@ const FileManager = () => {
                     </Button>
                   ))}
                   
-                  {items.length === 0 && !loading && (
+                  {items.length === 0 && !loading && !error && (
                     <div className="text-center py-4 text-muted-foreground">
                       No files found.
                     </div>
