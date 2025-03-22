@@ -12,7 +12,6 @@ import Roles from "./pages/Roles";
 import Hosts from "./pages/Hosts";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
-import TaskTemplates from "./pages/TaskTemplates";
 import { ThemeProvider } from "./components/theme-provider";
 
 const queryClient = new QueryClient({
@@ -39,7 +38,6 @@ const App = () => (
               <Route path="/roles" element={<Roles />} />
               <Route path="/hosts" element={<Hosts />} />
               <Route path="/settings" element={<Settings />} />
-              <Route path="/task-templates" element={<TaskTemplates />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>

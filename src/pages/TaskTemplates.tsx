@@ -1,367 +1,257 @@
 
 import { useState } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  Card, 
-  CardContent, 
-  CardDescription, 
-  CardHeader, 
-  CardTitle 
-} from "@/components/ui/card";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from "@/components/ui/table";
-import { Plus, Search, FileEdit, Play, Trash } from "lucide-react";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "sonner";
+import { Clock, Code, Play, Plus, Settings, Edit, Copy, FileCheck, TerminalSquare, Workflow } from "lucide-react";
+import { motion } from "framer-motion";
 
-// Mock data for templates
+// Mock template data
 const mockTemplates = [
-  { 
-    id: "1", 
-    name: "Deploy Web Application", 
-    description: "Deploys the web application to production servers",
-    category: "deploy",
-    lastRun: "2023-06-15T10:30:00",
-    status: "success"
+  {
+    id: "1",
+    name: "Deploy Web Application",
+    description: "Deploy the web application to production servers",
+    type: "deploy",
+    content: "---\n- name: Deploy Web Application\n  hosts: web_servers\n  tasks:\n    - name: Pull latest code\n      git:\n        repo: https://github.com/company/webapp\n        dest: /var/www/html\n\n    - name: Restart web service\n      service:\n        name: nginx\n        state: restarted",
+    lastRun: "2023-09-15T14:30:00Z",
+    status: "success",
+    runs: 24
   },
-  { 
-    id: "2", 
-    name: "Build Backend API", 
-    description: "Builds the backend API services",
-    category: "build",
-    lastRun: "2023-06-14T14:45:00",
-    status: "failed"
+  {
+    id: "2",
+    name: "Build Frontend Assets",
+    description: "Build and minify frontend assets for production",
+    type: "build",
+    content: "---\n- name: Build Frontend\n  hosts: build_servers\n  tasks:\n    - name: Install dependencies\n      npm:\n        path: /var/repo/frontend\n        state: present\n\n    - name: Build assets\n      command:\n        cmd: npm run build\n        chdir: /var/repo/frontend",
+    lastRun: "2023-09-10T11:20:00Z",
+    status: "failed",
+    runs: 18
   },
-  { 
-    id: "3", 
-    name: "Database Migration", 
-    description: "Run database migration scripts",
-    category: "deploy",
-    lastRun: "2023-06-13T09:15:00",
-    status: "success"
+  {
+    id: "3",
+    name: "Database Backup",
+    description: "Create a backup of the production database",
+    type: "backup",
+    content: "---\n- name: Backup Database\n  hosts: db_servers\n  tasks:\n    - name: Create backup directory\n      file:\n        path: /var/backups/db\n        state: directory\n\n    - name: Run pg_dump\n      command:\n        cmd: pg_dump -U postgres -F c main_db > /var/backups/db/main_db_$(date +%Y%m%d).dump",
+    lastRun: "2023-09-14T23:00:00Z",
+    status: "success",
+    runs: 56
   },
-  { 
-    id: "4", 
-    name: "Frontend Build", 
-    description: "Builds the frontend application",
-    category: "build",
-    lastRun: "2023-06-12T16:20:00",
-    status: "success"
-  }
 ];
 
 export default function TaskTemplates() {
-  const [searchValue, setSearchValue] = useState("");
   const [activeTab, setActiveTab] = useState("all");
-  
-  // Filter templates based on search and active tab
-  const filteredTemplates = mockTemplates.filter(template => {
-    const matchesSearch = template.name.toLowerCase().includes(searchValue.toLowerCase()) || 
-                         template.description.toLowerCase().includes(searchValue.toLowerCase());
-    
-    if (activeTab === "all") return matchesSearch;
-    return matchesSearch && template.category === activeTab;
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [newTemplate, setNewTemplate] = useState({
+    name: "",
+    description: "",
+    type: "deploy",
+    content: "---\n# New Task Template\n- name: My Task\n  hosts: all\n  tasks:\n    - name: Example Task\n      debug:\n        msg: \"Hello from Task Template\"",
   });
 
+  // Filter templates based on active tab and search query
+  const filteredTemplates = mockTemplates.filter(template => {
+    const matchesTab = activeTab === "all" || template.type === activeTab;
+    const matchesSearch = 
+      template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      template.description.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesTab && matchesSearch;
+  });
+
+  const handleCreateTemplate = () => {
+    // In a real app, we would send this to the API
+    toast.success("Template created successfully");
+    setIsCreateDialogOpen(false);
+    
+    // Reset form for next use
+    setNewTemplate({
+      name: "",
+      description: "",
+      type: "deploy",
+      content: "---\n# New Task Template\n- name: My Task\n  hosts: all\n  tasks:\n    - name: Example Task\n      debug:\n        msg: \"Hello from Task Template\"",
+    });
+  };
+  
+  const handleRunTemplate = (templateId: string, templateName: string) => {
+    toast.success(`Running template: ${templateName}`);
+  };
+  
+  const handleDuplicateTemplate = (templateId: string, templateName: string) => {
+    toast.success(`Duplicated template: ${templateName}`);
+  };
+
+  const getTemplateIcon = (type: string) => {
+    switch (type) {
+      case "build":
+        return <Code className="h-5 w-5 text-blue-500" />;
+      case "deploy":
+        return <FileCheck className="h-5 w-5 text-green-500" />;
+      case "backup":
+        return <TerminalSquare className="h-5 w-5 text-purple-500" />;
+      default:
+        return <Workflow className="h-5 w-5 text-gray-500" />;
+    }
+  };
+
   return (
-    <div className="p-6 max-w-7xl mx-auto w-full">
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Task Templates</h1>
-          <p className="text-muted-foreground mt-1">
-            Create and manage reusable task definitions
-          </p>
-        </div>
-        <Button className="flex items-center gap-2">
-          <Plus className="h-4 w-4" />
-          New Template
-        </Button>
+    <div className="p-3 md:p-6 max-w-7xl mx-auto w-full">
+      <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Task Templates</h1>
+        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="gap-2">
+              <Plus className="h-4 w-4" /> New Template
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Create New Task Template</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Name</Label>
+                <Input
+                  id="name"
+                  placeholder="Enter template name"
+                  value={newTemplate.name}
+                  onChange={(e) => setNewTemplate({...newTemplate, name: e.target.value})}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  placeholder="Enter template description"
+                  value={newTemplate.description}
+                  onChange={(e) => setNewTemplate({...newTemplate, description: e.target.value})}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="type">Type</Label>
+                <Select 
+                  value={newTemplate.type} 
+                  onValueChange={(value) => setNewTemplate({...newTemplate, type: value})}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select template type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="build">Build</SelectItem>
+                    <SelectItem value="deploy">Deploy</SelectItem>
+                    <SelectItem value="backup">Backup</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="content">Template Content</Label>
+                <Textarea
+                  id="content"
+                  className="font-mono h-[300px]"
+                  value={newTemplate.content}
+                  onChange={(e) => setNewTemplate({...newTemplate, content: e.target.value})}
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleCreateTemplate}>
+                Create Template
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
-      <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-6">
-        <div className="relative w-full md:w-80">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+      <div className="mb-6 flex flex-col md:flex-row gap-4">
+        <div className="w-full md:w-64">
           <Input
-            type="search"
             placeholder="Search templates..."
-            className="pl-8 w-full"
-            value={searchValue}
-            onChange={(e) => setSearchValue(e.target.value)}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full"
           />
         </div>
+        <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList>
+            <TabsTrigger value="all">All</TabsTrigger>
+            <TabsTrigger value="build">Build</TabsTrigger>
+            <TabsTrigger value="deploy">Deploy</TabsTrigger>
+            <TabsTrigger value="backup">Backup</TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
 
-      <Tabs defaultValue="all" className="w-full" onValueChange={setActiveTab}>
-        <TabsList className="mb-4">
-          <TabsTrigger value="all">All Templates</TabsTrigger>
-          <TabsTrigger value="build">Build</TabsTrigger>
-          <TabsTrigger value="deploy">Deploy</TabsTrigger>
-          <TabsTrigger value="edit">Edit</TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="all" className="mt-0">
-          <Card>
-            <CardHeader className="px-6 py-4">
-              <CardTitle>All Task Templates</CardTitle>
-              <CardDescription>
-                View and manage all task templates
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Last Run</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredTemplates.length > 0 ? (
-                    filteredTemplates.map((template) => (
-                      <TableRow key={template.id}>
-                        <TableCell className="font-medium">{template.name}</TableCell>
-                        <TableCell>{template.description}</TableCell>
-                        <TableCell>
-                          <span className="capitalize">{template.category}</span>
-                        </TableCell>
-                        <TableCell>{new Date(template.lastRun).toLocaleString()}</TableCell>
-                        <TableCell>
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            template.status === 'success' 
-                              ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' 
-                              : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
-                          }`}>
-                            {template.status}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button variant="outline" size="icon" title="Run template">
-                              <Play className="h-4 w-4" />
-                            </Button>
-                            <Button variant="outline" size="icon" title="Edit template">
-                              <FileEdit className="h-4 w-4" />
-                            </Button>
-                            <Button variant="outline" size="icon" title="Delete template">
-                              <Trash className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-6">
-                        No templates found. Create a new template to get started.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-        
-        <TabsContent value="build" className="mt-0">
-          <Card>
-            <CardHeader className="px-6 py-4">
-              <CardTitle>Build Templates</CardTitle>
-              <CardDescription>
-                Templates for build operations
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              {/* The table content is handled by the filteredTemplates logic */}
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead>Last Run</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredTemplates.length > 0 ? (
-                    filteredTemplates.map((template) => (
-                      <TableRow key={template.id}>
-                        <TableCell className="font-medium">{template.name}</TableCell>
-                        <TableCell>{template.description}</TableCell>
-                        <TableCell>{new Date(template.lastRun).toLocaleString()}</TableCell>
-                        <TableCell>
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            template.status === 'success' 
-                              ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' 
-                              : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
-                          }`}>
-                            {template.status}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button variant="outline" size="icon" title="Run template">
-                              <Play className="h-4 w-4" />
-                            </Button>
-                            <Button variant="outline" size="icon" title="Edit template">
-                              <FileEdit className="h-4 w-4" />
-                            </Button>
-                            <Button variant="outline" size="icon" title="Delete template">
-                              <Trash className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center py-6">
-                        No build templates found.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-        
-        <TabsContent value="deploy" className="mt-0">
-          <Card>
-            <CardHeader className="px-6 py-4">
-              <CardTitle>Deploy Templates</CardTitle>
-              <CardDescription>
-                Templates for deployment operations
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead>Last Run</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredTemplates.length > 0 ? (
-                    filteredTemplates.map((template) => (
-                      <TableRow key={template.id}>
-                        <TableCell className="font-medium">{template.name}</TableCell>
-                        <TableCell>{template.description}</TableCell>
-                        <TableCell>{new Date(template.lastRun).toLocaleString()}</TableCell>
-                        <TableCell>
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            template.status === 'success' 
-                              ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' 
-                              : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
-                          }`}>
-                            {template.status}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button variant="outline" size="icon" title="Run template">
-                              <Play className="h-4 w-4" />
-                            </Button>
-                            <Button variant="outline" size="icon" title="Edit template">
-                              <FileEdit className="h-4 w-4" />
-                            </Button>
-                            <Button variant="outline" size="icon" title="Delete template">
-                              <Trash className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center py-6">
-                        No deploy templates found.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-        
-        <TabsContent value="edit" className="mt-0">
-          <Card>
-            <CardHeader className="px-6 py-4">
-              <CardTitle>Edit Templates</CardTitle>
-              <CardDescription>
-                Templates for editing operations
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead>Last Run</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredTemplates.length > 0 ? (
-                    filteredTemplates.map((template) => (
-                      <TableRow key={template.id}>
-                        <TableCell className="font-medium">{template.name}</TableCell>
-                        <TableCell>{template.description}</TableCell>
-                        <TableCell>{new Date(template.lastRun).toLocaleString()}</TableCell>
-                        <TableCell>
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            template.status === 'success' 
-                              ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' 
-                              : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
-                          }`}>
-                            {template.status}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button variant="outline" size="icon" title="Run template">
-                              <Play className="h-4 w-4" />
-                            </Button>
-                            <Button variant="outline" size="icon" title="Edit template">
-                              <FileEdit className="h-4 w-4" />
-                            </Button>
-                            <Button variant="outline" size="icon" title="Delete template">
-                              <Trash className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center py-6">
-                        No edit templates found.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {filteredTemplates.length === 0 ? (
+          <div className="col-span-full text-center py-10 text-muted-foreground">
+            No templates found. Create a new template to get started.
+          </div>
+        ) : (
+          filteredTemplates.map((template) => (
+            <motion.div
+              key={template.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <Card className="h-full flex flex-col hover:shadow-md transition-shadow">
+                <CardHeader className="pb-2">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-2">
+                      {getTemplateIcon(template.type)}
+                      <CardTitle className="text-lg">{template.name}</CardTitle>
+                    </div>
+                    <span className={`text-xs px-2 py-1 rounded-full ${
+                      template.status === 'success' 
+                        ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' 
+                        : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
+                    }`}>
+                      {template.status}
+                    </span>
+                  </div>
+                  <CardDescription>{template.description}</CardDescription>
+                </CardHeader>
+                <CardContent className="flex-grow">
+                  <div className="border rounded p-2 bg-black/5 dark:bg-white/5 text-xs font-mono h-20 overflow-hidden">
+                    {template.content.split('\n').slice(0, 3).join('\n')}
+                    {template.content.split('\n').length > 3 && '...'}
+                  </div>
+                </CardContent>
+                <CardFooter className="flex justify-between pt-2">
+                  <div className="flex items-center text-xs text-muted-foreground gap-2">
+                    <Clock className="h-3 w-3" />
+                    <span>Last run: {new Date(template.lastRun).toLocaleDateString()}</span>
+                    <span>•</span>
+                    <span>{template.runs} runs</span>
+                  </div>
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="icon" onClick={() => handleDuplicateTemplate(template.id, template.name)}>
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon">
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => handleRunTemplate(template.id, template.name)}>
+                      <Play className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardFooter>
+              </Card>
+            </motion.div>
+          ))
+        )}
+      </div>
     </div>
   );
 }

@@ -1,22 +1,7 @@
 
 import { cn } from "@/lib/utils";
 import { NavLink } from "react-router-dom";
-import { 
-  Server, 
-  FileCode, 
-  Folder, 
-  List, 
-  Settings, 
-  Home, 
-  ChevronLeft, 
-  ChevronRight, 
-  History, 
-  Activity, 
-  Wrench,
-  Download,
-  Plus,
-  Code
-} from "lucide-react";
+import { Server, FileCode, Folder, List, Settings, Home, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -24,18 +9,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 const navItems = [
   { href: "/", label: "Dashboard", icon: Home },
   { href: "/playbooks", label: "Playbooks", icon: FileCode },
-  { href: "/task-templates", label: "Task Templates", icon: Code },
   { href: "/inventories", label: "Inventories", icon: List },
   { href: "/roles", label: "Roles", icon: Folder },
   { href: "/hosts", label: "Hosts", icon: Server },
-];
-
-const toolItems = [
-  { href: "/history", label: "History", icon: History },
-  { href: "/activity", label: "Activity", icon: Activity },
-  { href: "/building", label: "Building", icon: Wrench },
-  { href: "/runner/new", label: "New Runner", icon: Plus },
-  { href: "/export-logs", label: "Export Logs", icon: Download },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -69,76 +45,35 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
       </div>
       
       <ScrollArea className="flex-1 py-2">
-        <nav className="px-2 space-y-4">
-          <div>
-            <div className={cn("mb-2 px-3 text-xs font-semibold text-muted-foreground", collapsed && "text-center")}>
-              {!collapsed && "Main Menu"}
-            </div>
-            <TooltipProvider delayDuration={0}>
-              {navItems.map((item) => (
-                <Tooltip key={item.href}>
-                  <TooltipTrigger asChild>
-                    <NavLink
-                      to={item.href}
-                      className={({ isActive }) =>
-                        cn(
-                          "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                          isActive
-                            ? "bg-primary text-primary-foreground"
-                            : "hover:bg-accent hover:text-accent-foreground",
-                          collapsed && "justify-center px-2"
-                        )
-                      }
-                    >
-                      <item.icon className="h-5 w-5" />
-                      {!collapsed && <span>{item.label}</span>}
-                    </NavLink>
-                  </TooltipTrigger>
-                  {collapsed && (
-                    <TooltipContent side="right">
-                      {item.label}
-                    </TooltipContent>
-                  )}
-                </Tooltip>
-              ))}
-            </TooltipProvider>
-          </div>
-
-          <div className={cn("border-t border-border my-2")}></div>
-
-          <div>
-            <div className={cn("mb-2 px-3 text-xs font-semibold text-muted-foreground", collapsed && "text-center")}>
-              {!collapsed && "Tools & Settings"}
-            </div>
-            <TooltipProvider delayDuration={0}>
-              {toolItems.map((item) => (
-                <Tooltip key={item.href}>
-                  <TooltipTrigger asChild>
-                    <NavLink
-                      to={item.href}
-                      className={({ isActive }) =>
-                        cn(
-                          "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                          isActive
-                            ? "bg-primary text-primary-foreground"
-                            : "hover:bg-accent hover:text-accent-foreground",
-                          collapsed && "justify-center px-2"
-                        )
-                      }
-                    >
-                      <item.icon className="h-5 w-5" />
-                      {!collapsed && <span>{item.label}</span>}
-                    </NavLink>
-                  </TooltipTrigger>
-                  {collapsed && (
-                    <TooltipContent side="right">
-                      {item.label}
-                    </TooltipContent>
-                  )}
-                </Tooltip>
-              ))}
-            </TooltipProvider>
-          </div>
+        <nav className="px-2 space-y-1">
+          <TooltipProvider delayDuration={0}>
+            {navItems.map((item) => (
+              <Tooltip key={item.href}>
+                <TooltipTrigger asChild>
+                  <NavLink
+                    to={item.href}
+                    className={({ isActive }) =>
+                      cn(
+                        "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                        isActive
+                          ? "bg-primary text-primary-foreground"
+                          : "hover:bg-accent hover:text-accent-foreground",
+                        collapsed && "justify-center px-2"
+                      )
+                    }
+                  >
+                    <item.icon className="h-5 w-5" />
+                    {!collapsed && <span>{item.label}</span>}
+                  </NavLink>
+                </TooltipTrigger>
+                {collapsed && (
+                  <TooltipContent side="right">
+                    {item.label}
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            ))}
+          </TooltipProvider>
         </nav>
       </ScrollArea>
       
