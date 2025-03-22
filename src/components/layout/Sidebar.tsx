@@ -1,18 +1,35 @@
 
-import { Home, Book, Server, Users, Settings, FileText, FileSpreadsheet, Layout, CalendarClock, FileOutput, HardDrive, Wrench } from "lucide-react";
+import { Home, Book, Server, Users, Settings, FileText, FileSpreadsheet, Layout, CalendarClock, FileOutput, ChevronLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { NavLink } from "react-router-dom";
 
-interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {}
+interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
+}
 
-export function Sidebar({ className }: SidebarProps) {
+export function Sidebar({ className, collapsed = false, onToggleCollapse }: SidebarProps) {
   return (
     <div className={cn("pb-12", className)}>
+      {onToggleCollapse && (
+        <div className="flex justify-end p-2">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={onToggleCollapse}
+            className="h-8 w-8 p-0"
+          >
+            <ChevronLeft className={cn("h-4 w-4 transition-transform", collapsed && "rotate-180")} />
+            <span className="sr-only">Toggle sidebar</span>
+          </Button>
+        </div>
+      )}
+      
       <div className="space-y-4 py-4">
         <div className="px-3 py-2">
-          <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">
+          <h2 className={cn("mb-2 px-4 text-lg font-semibold tracking-tight", collapsed && "hidden")}>
             Navigation
           </h2>
           <div className="space-y-1">
@@ -20,10 +37,10 @@ export function Sidebar({ className }: SidebarProps) {
               {({ isActive }) => (
                 <Button
                   variant={isActive ? "secondary" : "ghost"}
-                  className="w-full justify-start"
+                  className={cn("w-full", collapsed ? "justify-center px-0" : "justify-start")}
                 >
-                  <Home className="mr-2 h-4 w-4" />
-                  Dashboard
+                  <Home className={cn("h-4 w-4", collapsed ? "mr-0" : "mr-2")} />
+                  {!collapsed && <span>Dashboard</span>}
                 </Button>
               )}
             </NavLink>
@@ -31,10 +48,10 @@ export function Sidebar({ className }: SidebarProps) {
               {({ isActive }) => (
                 <Button
                   variant={isActive ? "secondary" : "ghost"}
-                  className="w-full justify-start"
+                  className={cn("w-full", collapsed ? "justify-center px-0" : "justify-start")}
                 >
-                  <Book className="mr-2 h-4 w-4" />
-                  Playbooks
+                  <Book className={cn("h-4 w-4", collapsed ? "mr-0" : "mr-2")} />
+                  {!collapsed && <span>Playbooks</span>}
                 </Button>
               )}
             </NavLink>
@@ -42,10 +59,10 @@ export function Sidebar({ className }: SidebarProps) {
               {({ isActive }) => (
                 <Button
                   variant={isActive ? "secondary" : "ghost"}
-                  className="w-full justify-start"
+                  className={cn("w-full", collapsed ? "justify-center px-0" : "justify-start")}
                 >
-                  <Layout className="mr-2 h-4 w-4" />
-                  Task Templates
+                  <Layout className={cn("h-4 w-4", collapsed ? "mr-0" : "mr-2")} />
+                  {!collapsed && <span>Task Templates</span>}
                 </Button>
               )}
             </NavLink>
@@ -53,10 +70,10 @@ export function Sidebar({ className }: SidebarProps) {
               {({ isActive }) => (
                 <Button
                   variant={isActive ? "secondary" : "ghost"}
-                  className="w-full justify-start"
+                  className={cn("w-full", collapsed ? "justify-center px-0" : "justify-start")}
                 >
-                  <FileSpreadsheet className="mr-2 h-4 w-4" />
-                  Inventories
+                  <FileSpreadsheet className={cn("h-4 w-4", collapsed ? "mr-0" : "mr-2")} />
+                  {!collapsed && <span>Inventories</span>}
                 </Button>
               )}
             </NavLink>
@@ -64,10 +81,10 @@ export function Sidebar({ className }: SidebarProps) {
               {({ isActive }) => (
                 <Button
                   variant={isActive ? "secondary" : "ghost"}
-                  className="w-full justify-start"
+                  className={cn("w-full", collapsed ? "justify-center px-0" : "justify-start")}
                 >
-                  <FileText className="mr-2 h-4 w-4" />
-                  Roles
+                  <FileText className={cn("h-4 w-4", collapsed ? "mr-0" : "mr-2")} />
+                  {!collapsed && <span>Roles</span>}
                 </Button>
               )}
             </NavLink>
@@ -75,10 +92,10 @@ export function Sidebar({ className }: SidebarProps) {
               {({ isActive }) => (
                 <Button
                   variant={isActive ? "secondary" : "ghost"}
-                  className="w-full justify-start"
+                  className={cn("w-full", collapsed ? "justify-center px-0" : "justify-start")}
                 >
-                  <Server className="mr-2 h-4 w-4" />
-                  Hosts
+                  <Server className={cn("h-4 w-4", collapsed ? "mr-0" : "mr-2")} />
+                  {!collapsed && <span>Hosts</span>}
                 </Button>
               )}
             </NavLink>
@@ -86,10 +103,10 @@ export function Sidebar({ className }: SidebarProps) {
               {({ isActive }) => (
                 <Button
                   variant={isActive ? "secondary" : "ghost"}
-                  className="w-full justify-start"
+                  className={cn("w-full", collapsed ? "justify-center px-0" : "justify-start")}
                 >
-                  <CalendarClock className="mr-2 h-4 w-4" />
-                  Job Scheduler
+                  <CalendarClock className={cn("h-4 w-4", collapsed ? "mr-0" : "mr-2")} />
+                  {!collapsed && <span>Job Scheduler</span>}
                 </Button>
               )}
             </NavLink>
@@ -97,10 +114,10 @@ export function Sidebar({ className }: SidebarProps) {
               {({ isActive }) => (
                 <Button
                   variant={isActive ? "secondary" : "ghost"}
-                  className="w-full justify-start"
+                  className={cn("w-full", collapsed ? "justify-center px-0" : "justify-start")}
                 >
-                  <FileOutput className="mr-2 h-4 w-4" />
-                  Export Logs
+                  <FileOutput className={cn("h-4 w-4", collapsed ? "mr-0" : "mr-2")} />
+                  {!collapsed && <span>Export Logs</span>}
                 </Button>
               )}
             </NavLink>
@@ -108,7 +125,7 @@ export function Sidebar({ className }: SidebarProps) {
         </div>
         
         <div className="px-3 py-2">
-          <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">
+          <h2 className={cn("mb-2 px-4 text-lg font-semibold tracking-tight", collapsed && "hidden")}>
             Administration
           </h2>
           <div className="space-y-1">
@@ -116,10 +133,10 @@ export function Sidebar({ className }: SidebarProps) {
               {({ isActive }) => (
                 <Button
                   variant={isActive ? "secondary" : "ghost"}
-                  className="w-full justify-start"
+                  className={cn("w-full", collapsed ? "justify-center px-0" : "justify-start")}
                 >
-                  <Settings className="mr-2 h-4 w-4" />
-                  Settings
+                  <Settings className={cn("h-4 w-4", collapsed ? "mr-0" : "mr-2")} />
+                  {!collapsed && <span>Settings</span>}
                 </Button>
               )}
             </NavLink>
