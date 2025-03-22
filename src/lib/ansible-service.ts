@@ -36,6 +36,29 @@ const ANSIBLE_CONFIG = {
   configFile: process.env.ANSIBLE_CONFIG_FILE || '/etc/ansible/ansible.cfg',
 };
 
+// Ensure directories exist to prevent errors
+const ensureDirectoryExists = (directory: string): void => {
+  try {
+    if (!fs.existsSync(directory)) {
+      fs.mkdirSync(directory, { recursive: true });
+      console.log(`Created directory: ${directory}`);
+    }
+  } catch (error) {
+    console.error(`Error creating directory ${directory}:`, error);
+  }
+};
+
+// Initialize directories on startup
+const initializeDirectories = (): void => {
+  ensureDirectoryExists(ANSIBLE_CONFIG.playbooksDir);
+  ensureDirectoryExists(ANSIBLE_CONFIG.inventoriesDir);
+  ensureDirectoryExists(ANSIBLE_CONFIG.rolesDir);
+  console.log('Ansible directories initialized:', ANSIBLE_CONFIG);
+};
+
+// Call initialization
+initializeDirectories();
+
 // File operations with error handling
 const readFileAsync = async (filePath: string): Promise<string> => {
   try {
@@ -63,7 +86,8 @@ export const getPlaybooks = async (): Promise<Playbook[]> => {
     
     // Check if directory exists
     if (!fs.existsSync(ANSIBLE_CONFIG.playbooksDir)) {
-      console.warn(`Playbooks directory does not exist: ${ANSIBLE_CONFIG.playbooksDir}`);
+      console.warn(`Creating playbooks directory: ${ANSIBLE_CONFIG.playbooksDir}`);
+      ensureDirectoryExists(ANSIBLE_CONFIG.playbooksDir);
       return playbooks;
     }
     
@@ -103,7 +127,8 @@ export const getInventories = async (): Promise<Inventory[]> => {
     const inventories: Inventory[] = [];
     
     if (!fs.existsSync(ANSIBLE_CONFIG.inventoriesDir)) {
-      console.warn(`Inventories directory does not exist: ${ANSIBLE_CONFIG.inventoriesDir}`);
+      console.warn(`Creating inventories directory: ${ANSIBLE_CONFIG.inventoriesDir}`);
+      ensureDirectoryExists(ANSIBLE_CONFIG.inventoriesDir);
       return inventories;
     }
     
@@ -167,7 +192,8 @@ export const getRoles = async (): Promise<Role[]> => {
     const roles: Role[] = [];
     
     if (!fs.existsSync(ANSIBLE_CONFIG.rolesDir)) {
-      console.warn(`Roles directory does not exist: ${ANSIBLE_CONFIG.rolesDir}`);
+      console.warn(`Creating roles directory: ${ANSIBLE_CONFIG.rolesDir}`);
+      ensureDirectoryExists(ANSIBLE_CONFIG.rolesDir);
       return roles;
     }
     
@@ -314,21 +340,41 @@ export const getRecentRuns = async (): Promise<PlaybookRun[]> => {
         });
       }
     } else {
-      // If we can't access logs, try to get data from ansible-playbook command
+      // If we can't access logs, try to create log directory
       try {
-        const result = await execCommand('ansible-playbook --list-hosts');
+        console.warn(`Ansible log directory not found. Creating: ${logDir}`);
+        ensureDirectoryExists(logDir);
+      } catch (error) {
+        console.warn(`Unable to create log directory: ${error.message}`);
+      }
+      
+      // Try to get data from recent ansible command history
+      try {
+        const historyCommand = "grep -a ansible /root/.bash_history | tail -5";
+        const result = await execCommand(historyCommand).catch(() => {
+          console.warn("Could not read command history");
+          return "";
+        });
+        
         if (result) {
-          // Parse output to get playbook info
-          // This is a simplified approach; real implementation would need more context
-          recentRuns.push({
-            id: '1',
-            name: 'Recent Ansible Run',
-            status: 'success',
-            timestamp: new Date().toISOString(),
-          });
+          // Parse history to extract playbook info
+          const historyLines = result.split('\n');
+          for (const [index, line] of historyLines.entries()) {
+            if (line.includes('ansible-playbook')) {
+              const playbookMatch = line.match(/ansible-playbook\s+([^\s]+)/);
+              if (playbookMatch) {
+                recentRuns.push({
+                  id: String(index + 1),
+                  name: playbookMatch[1],
+                  status: 'success', // Assume success since we don't know
+                  timestamp: new Date().toISOString(),
+                });
+              }
+            }
+          }
         }
       } catch (error) {
-        console.warn('Could not get recent runs from ansible-playbook command');
+        console.warn('Could not get recent runs from ansible command history:', error);
       }
     }
     
@@ -344,15 +390,15 @@ export const getSystemInfo = async (): Promise<{ cpu: string; memory: string; di
   try {
     // Get CPU usage
     const cpuCommand = 'top -bn1 | grep "Cpu(s)" | sed "s/.*, *\\([0-9.]*\\)%* id.*/\\1/" | awk \'{print 100 - $1"%"}\'';
-    const cpu = await execCommand(cpuCommand);
+    const cpu = await execCommand(cpuCommand).catch(() => "0%");
     
     // Get memory usage
     const memCommand = 'free | grep Mem | awk \'{print $3/$2 * 100"%"}\'';
-    const memory = await execCommand(memCommand);
+    const memory = await execCommand(memCommand).catch(() => "0%");
     
     // Get disk usage
     const diskCommand = 'df -h / | awk \'NR==2 {print $5}\'';
-    const disk = await execCommand(diskCommand);
+    const disk = await execCommand(diskCommand).catch(() => "0%");
     
     return {
       cpu: cpu || '0%',
