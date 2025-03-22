@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -12,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { 
   CloudLightning, Server, Plus, Trash, Edit, RefreshCw, Search, 
   Cloud, Filter, Download, Settings, Play, RotateCw, Loader2, 
@@ -317,7 +317,7 @@ const CloudInventory = () => {
           return {
             ...provider,
             lastSync: now,
-            status: 'active'
+            status: 'active' as const
           };
         }
         return provider;
@@ -405,7 +405,7 @@ const CloudInventory = () => {
               type: newProvider.type as any,
               credentials: newProvider.credentials || provider.credentials,
               syncEnabled: newProvider.syncEnabled !== undefined ? newProvider.syncEnabled : provider.syncEnabled,
-              status: 'active'
+              status: 'active' as const
             };
           }
           return provider;
@@ -424,7 +424,7 @@ const CloudInventory = () => {
           type: newProvider.type as any,
           credentials: newProvider.credentials || {},
           syncEnabled: newProvider.syncEnabled !== undefined ? newProvider.syncEnabled : true,
-          status: 'active'
+          status: 'active' as const
         };
         
         setProviders([...providers, newProviderData]);

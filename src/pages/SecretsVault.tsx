@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -80,15 +79,12 @@ const SecretsVault = () => {
   const [secretHistoryOpen, setSecretHistoryOpen] = useState(false);
   
   useEffect(() => {
-    // Mock data fetching
     const fetchData = async () => {
       try {
         setLoading(true);
         
-        // Simulate API call
         await new Promise(resolve => setTimeout(resolve, 800));
         
-        // Mock Secrets
         const mockSecrets: Secret[] = [
           {
             id: "1",
@@ -142,7 +138,6 @@ const SecretsVault = () => {
           }
         ];
         
-        // Mock Vaults
         const mockVaults: VaultConfig[] = [
           {
             id: "1",
@@ -214,7 +209,6 @@ const SecretsVault = () => {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    // Search already handled by the useEffect above
   };
 
   const copyToClipboard = (text: string) => {
@@ -345,11 +339,9 @@ const SecretsVault = () => {
     try {
       setLoading(true);
       
-      // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       if (editMode && selectedSecret) {
-        // Update existing secret
         const updatedSecrets = secrets.map(secret => {
           if (secret.id === selectedSecret.id) {
             return {
@@ -372,7 +364,6 @@ const SecretsVault = () => {
           description: "Secret updated successfully"
         });
       } else {
-        // Create new secret
         const newSecretData: Secret = {
           id: Math.random().toString(36).substring(7),
           name: newSecret.name || "",
@@ -383,7 +374,7 @@ const SecretsVault = () => {
           created: new Date().toISOString(),
           updated: new Date().toISOString(),
           tags: newSecret.tags || [],
-          createdBy: "current_user" // In a real app, this would be the current user
+          createdBy: "current_user"
         };
         
         setSecrets([...secrets, newSecretData]);
@@ -420,11 +411,9 @@ const SecretsVault = () => {
     try {
       setLoading(true);
       
-      // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       if (editMode && selectedVault) {
-        // Update existing vault
         const updatedVaults = vaults.map(vault => {
           if (vault.id === selectedVault.id) {
             return {
@@ -447,7 +436,6 @@ const SecretsVault = () => {
           description: "Vault updated successfully"
         });
       } else {
-        // Create new vault
         const newVaultData: VaultConfig = {
           id: Math.random().toString(36).substring(7),
           name: newVault.name || "",
@@ -484,10 +472,8 @@ const SecretsVault = () => {
     try {
       setLoading(true);
       
-      // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 800));
       
-      // Delete secret
       const updatedSecrets = secrets.filter(secret => secret.id !== secretId);
       setSecrets(updatedSecrets);
       
@@ -515,10 +501,8 @@ const SecretsVault = () => {
     try {
       setLoading(true);
       
-      // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 800));
       
-      // Delete vault
       const updatedVaults = vaults.filter(vault => vault.id !== vaultId);
       setVaults(updatedVaults);
       
@@ -539,6 +523,29 @@ const SecretsVault = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const renderSecretValueEditor = () => {
+    if (newSecret.type === 'ssh_key' || newSecret.type === 'file') {
+      return (
+        <Textarea 
+          id="secret-value"
+          value={newSecret.value || ""}
+          onChange={(e) => setNewSecret({...newSecret, value: e.target.value})}
+          rows={6}
+          className="font-mono"
+        />
+      );
+    } else {
+      return (
+        <Input 
+          id="secret-value"
+          value={newSecret.value || ""}
+          onChange={(e) => setNewSecret({...newSecret, value: e.target.value})}
+          type={showSecretValue ? "text" : "password"}
+        />
+      );
     }
   };
 
@@ -641,23 +648,7 @@ const SecretsVault = () => {
                         )}
                       </Button>
                     </div>
-                    {(newSecret.type === 'ssh_key' || newSecret.type === 'file') ? (
-                      <Textarea 
-                        id="secret-value"
-                        value={newSecret.value || ""}
-                        onChange={(e) => setNewSecret({...newSecret, value: e.target.value})}
-                        rows={6}
-                        className="font-mono"
-                        type={showSecretValue ? "text" : "password"}
-                      />
-                    ) : (
-                      <Input 
-                        id="secret-value"
-                        value={newSecret.value || ""}
-                        onChange={(e) => setNewSecret({...newSecret, value: e.target.value})}
-                        type={showSecretValue ? "text" : "password"}
-                      />
-                    )}
+                    {renderSecretValueEditor()}
                   </div>
                   
                   <div className="flex items-center space-x-2">
@@ -1304,7 +1295,6 @@ const SecretsVault = () => {
                       variant="outline" 
                       size="sm"
                       onClick={() => {
-                        // Simulate vault test
                         toast({
                           title: "Success",
                           description: `Connection to ${vault.name} successful`
@@ -1319,7 +1309,6 @@ const SecretsVault = () => {
                       variant={vault.active ? "outline" : "default"} 
                       size="sm"
                       onClick={() => {
-                        // Toggle vault active state
                         const updatedVaults = vaults.map(v => {
                           if (v.id === vault.id) {
                             return { ...v, active: !v.active };

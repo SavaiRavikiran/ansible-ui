@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -10,15 +9,12 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "@/hooks/use-toast";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Checkbox } from "@/components/ui/checkbox";
-import { 
-  Bell, Mail, MessageSquare, Webhook, Link2, Plus, Trash, Edit, 
-  Send, CheckCircle2, AlertCircle, Code, RefreshCw, Settings, Play,
-  MailCheck, Vibrate, ArrowRight, Search
-} from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
+import { 
+  Bell, Settings, Plus, Trash, Edit, Mail, MessageSquare, Webhook, Search, 
+  Filter, Download, CheckCircle, AlertCircle, Clock, RefreshCw, Send, 
+  MessageSquareText, BellRing
+} from "lucide-react";
 
 interface NotificationChannel {
   id: string;
@@ -71,7 +67,8 @@ const Notifications = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sending, setSending] = useState(false);
-  
+  const [testingChannel, setTestingChannel] = useState<string | null>(null);
+
   const [newChannel, setNewChannel] = useState<Partial<NotificationChannel>>({
     name: "",
     type: "email",
@@ -471,63 +468,60 @@ const Notifications = () => {
     }
   };
 
-  const handleTestNotification = async () => {
-    if (!selectedChannel) return;
-    
+  const testNotificationChannel = async (channelId: string) => {
     try {
-      setSending(true);
+      const channelToTest = channels.find(ch => ch.id === channelId);
+      if (!channelToTest) return;
+      
+      setTestingChannel(channelId);
       
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // Update the channel's last sent info
+      // Update last sent time and status
       const now = new Date().toISOString();
       const updatedChannels = channels.map(channel => {
-        if (channel.id === selectedChannel.id) {
+        if (channel.id === channelId) {
           return {
             ...channel,
             lastSent: now,
-            lastStatus: 'success'
+            lastStatus: 'success' as const
           };
         }
         return channel;
       });
       
-      // Add a new log entry
-      const newLog: NotificationLog = {
-        id: Math.random().toString(36).substring(7),
-        timestamp: now,
-        channel: selectedChannel.name,
-        channelType: selectedChannel.type,
-        event: "Test Notification",
-        status: 'success',
-        recipients: selectedChannel.type === 'email' 
-          ? (selectedChannel.config.recipients || []).join(', ')
-          : selectedChannel.type === 'slack'
-            ? selectedChannel.config.channel || ''
-            : '',
-        message: "This is a test notification from Ansible UI"
-      };
-      
       setChannels(updatedChannels);
-      setLogs([newLog, ...logs]);
-      setFilteredLogs([newLog, ...filteredLogs]);
       
       toast({
-        title: "Success",
-        description: "Test notification sent successfully"
+        title: "Test Successful",
+        description: `Test message sent to ${channelToTest.name}`
+      });
+    } catch (error) {
+      console.error("Error testing notification channel:", error);
+      
+      // Update with error status
+      const updatedChannels = channels.map(channel => {
+        if (channel.id === channelId) {
+          return {
+            ...channel,
+            lastSent: new Date().toISOString(),
+            lastStatus: 'failed' as const,
+            lastError: "Failed to send test notification"
+          };
+        }
+        return channel;
       });
       
-      setTestDialogOpen(false);
-    } catch (error) {
-      console.error("Error sending test notification:", error);
+      setChannels(updatedChannels);
+      
       toast({
         variant: "destructive",
-        title: "Error",
+        title: "Test Failed",
         description: "Failed to send test notification"
       });
     } finally {
-      setSending(false);
+      setTestingChannel(null);
     }
   };
 
@@ -981,7 +975,7 @@ const Notifications = () => {
                               Cancel
                             </Button>
                             <Button 
-                              onClick={handleTestNotification} 
+                              onClick={() => testNotificationChannel(channel.id)} 
                               disabled={sending}
                             >
                               {sending ? (
@@ -1246,7 +1240,7 @@ const Notifications = () => {
                         <TableCell>
                           {log.status === 'success' ? (
                             <Badge variant="outline" className="bg-green-100 text-green-800">
-                              <CheckCircle2 className="h-3 w-3 mr-1" />
+                              <CheckCircle className="h-3 w-3 mr-1" />
                               Success
                             </Badge>
                           ) : (
