@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -1087,4 +1088,151 @@ const UserManagement = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Name</TableHead
+                      <TableHead>Name</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Permissions</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {roles.map((role) => (
+                      <TableRow key={role.id}>
+                        <TableCell className="font-medium">{role.name}</TableCell>
+                        <TableCell>{role.description}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {role.permissions.map((permission) => (
+                              <Badge key={permission} variant="outline" className="text-xs">
+                                {permission}
+                              </Badge>
+                            ))}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button variant="ghost" size="sm" onClick={() => openRoleDialog(role)}>
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleDeleteRole(role.id)}>
+                              <Trash className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="teams">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold">Team Management</h2>
+            <Button onClick={() => setTeamDialogOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Create Team
+            </Button>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Teams</CardTitle>
+              <CardDescription>
+                Manage teams and their members.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Members</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {teams.map((team) => (
+                      <TableRow key={team.id}>
+                        <TableCell className="font-medium">{team.name}</TableCell>
+                        <TableCell>{team.description}</TableCell>
+                        <TableCell>{team.members.length} members</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button variant="ghost" size="sm" onClick={() => openTeamDialog(team)}>
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleDeleteTeam(team.id)}>
+                              <Trash className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="permissions">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold">Permission Management</h2>
+            <Button onClick={() => setPermissionDialogOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Create Permission
+            </Button>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Permissions</CardTitle>
+              <CardDescription>
+                Manage system permissions.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {permissions.map((permission) => (
+                      <TableRow key={permission.id}>
+                        <TableCell className="font-medium">{permission.name}</TableCell>
+                        <TableCell>{permission.description}</TableCell>
+                        <TableCell>{permission.category}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button variant="ghost" size="sm" onClick={() => openPermissionDialog(permission)}>
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleDeletePermission(permission.id)}>
+                              <Trash className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+};
+
+export default UserManagement;
