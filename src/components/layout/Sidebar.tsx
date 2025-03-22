@@ -12,7 +12,7 @@ import {
   ChevronRight, 
   History, 
   Activity, 
-  Tool,
+  Wrench,
   Download,
   Plus,
   Code
@@ -33,7 +33,7 @@ const navItems = [
 const toolItems = [
   { href: "/history", label: "History", icon: History },
   { href: "/activity", label: "Activity", icon: Activity },
-  { href: "/building", label: "Building", icon: Tool },
+  { href: "/building", label: "Building", icon: Wrench },
   { href: "/runner/new", label: "New Runner", icon: Plus },
   { href: "/export-logs", label: "Export Logs", icon: Download },
   { href: "/settings", label: "Settings", icon: Settings },
