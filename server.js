@@ -1,3 +1,4 @@
+
 import express from 'express';
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -359,12 +360,15 @@ app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'healthy' });
 });
 
-// Serve static files from the build directory
-app.use(express.static(path.join(__dirname, 'dist')));
+// Important: Serve static files first, before the catch-all route
+const distPath = path.join(__dirname, 'dist');
+console.log(`Serving static files from: ${distPath}`);
+app.use(express.static(distPath));
 
-// For SPA, serve index.html for any route not matched
+// For any routes that don't match an API endpoint or static file, serve index.html
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+  console.log(`Serving index.html for path: ${req.path}`);
+  res.sendFile(path.join(distPath, 'index.html'));
 });
 
 // Start the server

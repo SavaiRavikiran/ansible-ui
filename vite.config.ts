@@ -28,6 +28,7 @@ export default defineConfig(({ mode }) => ({
   // Ensure Node.js built-ins are not bundled
   build: {
     rollupOptions: {
+      external: ['child_process', 'fs', 'path', 'os', 'crypto'],
       output: {
         manualChunks(id) {
           // Create separate chunks for major dependencies
