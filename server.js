@@ -1,4 +1,3 @@
-
 import express from 'express';
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -59,6 +58,31 @@ const formatFileSize = (bytes) => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
+// Check if Ansible is installed and working properly
+const checkAnsibleAvailability = async () => {
+  try {
+    const result = await execCommand('ansible --version');
+    return { available: true, version: result.split('\n')[0] };
+  } catch (error) {
+    console.warn('Ansible not found or not working properly:', error.message);
+    return { available: false, error: error.message };
+  }
+};
+
+// API endpoint to check Ansible availability
+app.get('/api/ansible-status', async (req, res) => {
+  try {
+    const status = await checkAnsibleAvailability();
+    res.json(status);
+  } catch (error) {
+    console.error('Error checking Ansible status:', error);
+    res.status(500).json({ 
+      message: `Error checking Ansible status: ${error.message}`,
+      available: false
+    });
+  }
+});
+
 // API endpoints for the Ansible UI
 app.get('/api/dashboard', async (req, res) => {
   try {
@@ -67,6 +91,143 @@ app.get('/api/dashboard', async (req, res) => {
   } catch (error) {
     console.error('Error fetching dashboard stats:', error);
     res.status(500).json({ message: `Error fetching dashboard stats: ${error.message}` });
+  }
+});
+
+// API endpoint to search for Ansible resources in custom paths
+app.post('/api/search-ansible-resources', async (req, res) => {
+  try {
+    const { customPath } = req.body;
+    
+    if (!customPath) {
+      return res.status(400).json({ message: 'Custom path is required' });
+    }
+    
+    // Check if the path exists
+    try {
+      await fs.access(customPath);
+    } catch (error) {
+      return res.status(404).json({ 
+        message: `Directory does not exist: ${customPath}`,
+        exists: false 
+      });
+    }
+    
+    // Check for common Ansible structures
+    const hasPlaybooks = fs.existsSync(path.join(customPath, 'playbooks')) || 
+                         fs.existsSync(path.join(customPath, 'site.yml'));
+    const hasInventories = fs.existsSync(path.join(customPath, 'inventories')) || 
+                           fs.existsSync(path.join(customPath, 'hosts'));
+    const hasRoles = fs.existsSync(path.join(customPath, 'roles'));
+    
+    res.json({
+      exists: true,
+      hasAnsibleResources: hasPlaybooks || hasInventories || hasRoles,
+      resources: {
+        playbooks: hasPlaybooks,
+        inventories: hasInventories,
+        roles: hasRoles
+      }
+    });
+  } catch (error) {
+    console.error('Error searching for Ansible resources:', error);
+    res.status(500).json({ message: `Error searching for Ansible resources: ${error.message}` });
+  }
+});
+
+// Helper function to create sample Ansible project
+const createSampleAnsibleProject = async (targetDir) => {
+  try {
+    // Create directory structure
+    await fs.mkdir(targetDir, { recursive: true });
+    await fs.mkdir(path.join(targetDir, 'playbooks'), { recursive: true });
+    await fs.mkdir(path.join(targetDir, 'inventories'), { recursive: true });
+    await fs.mkdir(path.join(targetDir, 'roles'), { recursive: true });
+    
+    // Create sample playbook
+    const samplePlaybook = `---
+# Description: Sample playbook for beginners
+- name: Sample Playbook
+  hosts: all
+  become: true
+  
+  tasks:
+    - name: Ensure system is updated
+      apt:
+        update_cache: yes
+        upgrade: dist
+      when: ansible_os_family == "Debian"
+      
+    - name: Print system information
+      debug:
+        msg: "Running on {{ ansible_distribution }} {{ ansible_distribution_version }}"
+`;
+    
+    await fs.writeFile(path.join(targetDir, 'playbooks', 'sample.yml'), samplePlaybook);
+    
+    // Create sample inventory
+    const sampleInventory = `[webservers]
+web1.example.com
+web2.example.com
+
+[dbservers]
+db1.example.com
+
+[all:vars]
+ansible_user=ansible
+`;
+    
+    await fs.writeFile(path.join(targetDir, 'inventories', 'hosts'), sampleInventory);
+    
+    // Create ansible.cfg
+    const ansibleConfig = `[defaults]
+inventory = ./inventories/hosts
+remote_user = ansible
+host_key_checking = False
+roles_path = ./roles
+`;
+    
+    await fs.writeFile(path.join(targetDir, 'ansible.cfg'), ansibleConfig);
+    
+    return {
+      success: true,
+      path: targetDir
+    };
+  } catch (error) {
+    console.error('Error creating sample Ansible project:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+};
+
+// API endpoint to create sample Ansible project
+app.post('/api/create-sample-project', async (req, res) => {
+  try {
+    const { targetDir } = req.body;
+    
+    if (!targetDir) {
+      return res.status(400).json({ message: 'Target directory is required' });
+    }
+    
+    const result = await createSampleAnsibleProject(targetDir);
+    
+    if (result.success) {
+      res.json({
+        success: true,
+        message: 'Sample Ansible project created successfully',
+        path: result.path
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: `Failed to create sample project: ${result.error}`
+      });
+    }
+  } catch (error) {
+    console.error('Error creating sample Ansible project:', error);
+    res.status(500).json({ message: `Error creating sample Ansible project: ${error.message}` });
   }
 });
 
@@ -370,6 +531,25 @@ app.get('/api/health', (req, res) => {
 
 // Main startup function
 async function startServer() {
+  console.log(`Starting server in ${process.env.NODE_ENV || 'development'} mode...`);
+  
+  // Check if we're in a Docker container
+  const isDocker = fs.existsSync('/.dockerenv') || fs.existsSync('/proc/1/cgroup') && 
+                   (await fs.readFile('/proc/1/cgroup', 'utf8')).includes('docker');
+  
+  console.log(`Running in Docker: ${isDocker ? 'Yes' : 'No'}`);
+  console.log(`Ansible directories:`);
+  console.log(`- Playbooks: ${process.env.ANSIBLE_PLAYBOOKS_DIR || '/etc/ansible/playbooks'}`);
+  console.log(`- Inventories: ${process.env.ANSIBLE_INVENTORIES_DIR || '/etc/ansible/inventories'}`);
+  console.log(`- Roles: ${process.env.ANSIBLE_ROLES_DIR || '/etc/ansible/roles'}`);
+  
+  // Check Ansible availability
+  const ansibleStatus = await checkAnsibleAvailability();
+  console.log(`Ansible availability: ${ansibleStatus.available ? 'Yes' : 'No'}`);
+  if (ansibleStatus.available) {
+    console.log(`Ansible version: ${ansibleStatus.version}`);
+  }
+  
   // In development, set up Vite middleware
   if (process.env.NODE_ENV !== 'production') {
     try {
@@ -381,17 +561,23 @@ async function startServer() {
       
       // Use vite's connect instance as middleware
       app.use(vite.middlewares);
+      
+      console.log('Vite development server middleware is active');
     } catch (error) {
       console.error('Error creating Vite development server:', error);
     }
   } else {
     // Serve static files from the build directory in production
-    app.use(express.static(path.join(__dirname, 'dist')));
+    const staticPath = path.join(__dirname, 'dist');
+    console.log(`Serving static files from: ${staticPath}`);
+    app.use(express.static(staticPath));
   }
 
-  // For SPA, serve index.html for any route not matched by static files or API routes
+  // For SPA, serve index.html for any route not matched by API routes or static files
   app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+    const indexPath = path.join(__dirname, 'dist', 'index.html');
+    console.log(`Serving index.html from: ${indexPath}`);
+    res.sendFile(indexPath);
   });
 
   // Start the server

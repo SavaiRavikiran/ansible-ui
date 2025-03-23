@@ -5,7 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AppLayout } from "./components/layout/AppLayout";
-import Dashboard from "./pages/Dashboard";
+import DashboardWrapper from "./components/ansible/DashboardWrapper";
 import Playbooks from "./pages/Playbooks";
 import Inventories from "./pages/Inventories";
 import Roles from "./pages/Roles";
@@ -43,7 +43,7 @@ const App = () => (
         <BrowserRouter>
           <AppLayout>
             <Routes>
-              <Route path="/" element={<Dashboard />} />
+              <Route path="/" element={<DashboardWrapper />} />
               <Route path="/playbooks" element={<Playbooks />} />
               <Route path="/task-templates" element={<TaskTemplates />} />
               <Route path="/inventories" element={<Inventories />} />
