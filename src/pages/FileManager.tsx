@@ -3,12 +3,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { toast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -16,9 +12,8 @@ import {
   FileText, Folder, File, Upload, Download, Plus, Trash, Edit, 
   Copy, FileUp, ExternalLink, FolderUp, RefreshCw, Search, FileCog
 } from "lucide-react";
-import * as fs from 'fs';
-import * as path from 'path';
-import { exec } from 'child_process';
+import { toast } from "@/hooks/use-toast";
+import { fileApiClient } from "@/lib/file-api-client";
 
 interface FileItem {
   id: string;
@@ -29,42 +24,6 @@ interface FileItem {
   lastModified: string;
   content?: string;
 }
-
-const execCommand = (cmd: string): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    exec(cmd, (error, stdout, stderr) => {
-      if (error) {
-        console.error(`Error executing command: ${error.message}`);
-        reject(error);
-        return;
-      }
-      if (stderr) {
-        console.warn(`Command stderr: ${stderr}`);
-      }
-      resolve(stdout.trim());
-    });
-  });
-};
-
-const readFileAsync = async (filePath: string): Promise<string> => {
-  try {
-    return await fs.promises.readFile(filePath, 'utf8');
-  } catch (error) {
-    console.error(`Error reading file ${filePath}:`, error);
-    return '';
-  }
-};
-
-const writeFileAsync = async (filePath: string, content: string): Promise<boolean> => {
-  try {
-    await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
-    await fs.promises.writeFile(filePath, content, 'utf8');
-    return true;
-  } catch (error) {
-    console.error(`Error writing file ${filePath}:`, error);
-    return false;
-  }
-};
 
 const FileManager = () => {
   const [currentPath, setCurrentPath] = useState<string>("/etc/ansible");
@@ -78,7 +37,6 @@ const FileManager = () => {
   const [editDialogOpen, setEditDialogOpen] = useState<boolean>(false);
   const [newItemName, setNewItemName] = useState<string>("");
   const [fileContent, setFileContent] = useState<string>("");
-  const [fileType, setFileType] = useState<string>("text");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -95,59 +53,9 @@ const FileManager = () => {
       setLoading(true);
       setError(null);
       
-      if (!fs.existsSync(path)) {
-        setError(`Directory does not exist: ${path}`);
-        setItems([]);
-        setLoading(false);
-        return;
-      }
-      
-      const files = await fs.promises.readdir(path);
-      const fileItems: FileItem[] = [];
-      
-      for (const file of files) {
-        try {
-          const filePath = `${path}/${file}`;
-          const stats = await fs.promises.stat(filePath);
-          
-          if (searchQuery && !file.toLowerCase().includes(searchQuery.toLowerCase())) {
-            continue;
-          }
-          
-          if (stats.isDirectory()) {
-            fileItems.push({
-              id: Buffer.from(filePath).toString('base64'),
-              name: file,
-              type: 'folder',
-              path: filePath,
-              lastModified: stats.mtime.toISOString()
-            });
-          } else {
-            const isTemplate = file.endsWith('.j2') || file.endsWith('.template') || file.endsWith('.tpl');
-            
-            fileItems.push({
-              id: Buffer.from(filePath).toString('base64'),
-              name: file,
-              type: isTemplate ? 'template' : 'file',
-              path: filePath,
-              size: formatFileSize(stats.size),
-              lastModified: stats.mtime.toISOString()
-            });
-          }
-        } catch (fileError) {
-          console.error(`Error processing file ${file}:`, fileError);
-        }
-      }
-      
-      fileItems.sort((a, b) => {
-        if (a.type === 'folder' && b.type !== 'folder') return -1;
-        if (a.type !== 'folder' && b.type === 'folder') return 1;
-        return a.name.localeCompare(b.name);
-      });
-      
+      const fileItems = await fileApiClient.fetchFiles(path, searchQuery);
       setItems(fileItems);
       setSelectedItem(null);
-      setLoading(false);
     } catch (error) {
       console.error('Error fetching items:', error);
       setError(`Failed to load directory: ${error.message}`);
@@ -157,6 +65,7 @@ const FileManager = () => {
         description: "Failed to load files and directories"
       });
       setItems([]);
+    } finally {
       setLoading(false);
     }
   };
@@ -179,7 +88,7 @@ const FileManager = () => {
       navigateTo(item.path);
     } else {
       try {
-        const content = await readFileAsync(item.path);
+        const content = await fileApiClient.readFile(item.path);
         const updatedItem = { ...item, content };
         setSelectedItem(updatedItem);
         setFileContent(content);
@@ -201,34 +110,13 @@ const FileManager = () => {
       setLoading(true);
       
       try {
-        const content = await readFileAsText(file);
+        const newItem = await fileApiClient.uploadFile(currentPath, file);
+        setItems([...items, newItem]);
         
-        const destPath = `${currentPath}/${file.name}`;
-        
-        const success = await writeFileAsync(destPath, content);
-        
-        if (success) {
-          const stats = await fs.promises.stat(destPath);
-          
-          const newItem: FileItem = {
-            id: Buffer.from(destPath).toString('base64'),
-            name: file.name,
-            type: file.name.endsWith('.j2') || file.name.endsWith('.template') || file.name.endsWith('.tpl') ? 'template' : 'file',
-            path: destPath,
-            size: formatFileSize(file.size),
-            lastModified: stats.mtime.toISOString(),
-            content
-          };
-          
-          setItems([...items, newItem]);
-          
-          toast({
-            title: "Success",
-            description: `File ${file.name} uploaded successfully`,
-          });
-        } else {
-          throw new Error('Failed to write file');
-        }
+        toast({
+          title: "Success",
+          description: `File ${file.name} uploaded successfully`,
+        });
       } catch (error) {
         console.error('Error uploading file:', error);
         toast({
@@ -255,12 +143,6 @@ const FileManager = () => {
     });
   };
 
-  const formatFileSize = (bytes: number): string => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
-
   const handleCreateFolder = async () => {
     if (!newItemName) return;
     
@@ -268,27 +150,19 @@ const FileManager = () => {
       setLoading(true);
       
       const dirPath = `${currentPath}/${newItemName}`;
-      await fs.promises.mkdir(dirPath, { recursive: true });
+      const success = await fileApiClient.createDirectory(dirPath);
       
-      const stats = await fs.promises.stat(dirPath);
-      
-      const newItem: FileItem = {
-        id: Buffer.from(dirPath).toString('base64'),
-        name: newItemName,
-        type: 'folder',
-        path: dirPath,
-        lastModified: stats.mtime.toISOString()
-      };
-      
-      setItems([...items, newItem]);
-      
-      toast({
-        title: "Success",
-        description: `Folder ${newItemName} created successfully`,
-      });
-      
-      setNewItemName("");
-      setNewFolderDialogOpen(false);
+      if (success) {
+        await fetchItems(currentPath);
+        
+        toast({
+          title: "Success",
+          description: `Folder ${newItemName} created successfully`,
+        });
+        
+        setNewItemName("");
+        setNewFolderDialogOpen(false);
+      }
     } catch (error) {
       console.error('Error creating folder:', error);
       toast({
@@ -308,22 +182,10 @@ const FileManager = () => {
       setLoading(true);
       
       const filePath = `${currentPath}/${newItemName}`;
-      const success = await writeFileAsync(filePath, '');
+      const success = await fileApiClient.writeFile(filePath, '');
       
       if (success) {
-        const stats = await fs.promises.stat(filePath);
-        
-        const newItem: FileItem = {
-          id: Buffer.from(filePath).toString('base64'),
-          name: newItemName,
-          type: newItemName.endsWith('.j2') || newItemName.endsWith('.template') || newItemName.endsWith('.tpl') ? 'template' : 'file',
-          path: filePath,
-          size: '0 B',
-          lastModified: stats.mtime.toISOString(),
-          content: ''
-        };
-        
-        setItems([...items, newItem]);
+        await fetchItems(currentPath);
         
         toast({
           title: "Success",
@@ -332,8 +194,6 @@ const FileManager = () => {
         
         setNewItemName("");
         setNewFileDialogOpen(false);
-      } else {
-        throw new Error('Failed to create file');
       }
     } catch (error) {
       console.error('Error creating file:', error);
@@ -353,7 +213,7 @@ const FileManager = () => {
     try {
       setLoading(true);
       
-      const success = await writeFileAsync(selectedItem.path, fileContent);
+      const success = await fileApiClient.writeFile(selectedItem.path, fileContent);
       
       if (success) {
         const updatedItem = {
@@ -379,8 +239,6 @@ const FileManager = () => {
         });
         
         setEditDialogOpen(false);
-      } else {
-        throw new Error('Failed to save file');
       }
     } catch (error) {
       console.error('Error saving file:', error);
@@ -419,21 +277,22 @@ const FileManager = () => {
     try {
       setLoading(true);
       
-      if (selectedItem.type === 'folder') {
-        await fs.promises.rmdir(selectedItem.path, { recursive: true });
-      } else {
-        await fs.promises.unlink(selectedItem.path);
+      const success = await fileApiClient.deleteItem(
+        selectedItem.path, 
+        selectedItem.type === 'folder'
+      );
+      
+      if (success) {
+        const updatedItems = items.filter(item => item.id !== selectedItem.id);
+        setItems(updatedItems);
+        
+        toast({
+          title: "Success",
+          description: `${selectedItem.type === 'folder' ? 'Folder' : 'File'} ${selectedItem.name} deleted successfully`,
+        });
+        
+        setSelectedItem(null);
       }
-      
-      const updatedItems = items.filter(item => item.id !== selectedItem.id);
-      setItems(updatedItems);
-      
-      toast({
-        title: "Success",
-        description: `${selectedItem.type === 'folder' ? 'Folder' : 'File'} ${selectedItem.name} deleted successfully`,
-      });
-      
-      setSelectedItem(null);
     } catch (error) {
       console.error('Error deleting item:', error);
       toast({

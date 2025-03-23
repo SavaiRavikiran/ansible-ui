@@ -1,661 +1,255 @@
-import express from 'express';
-import cors from 'cors';
-import { fileURLToPath } from 'url';
-import path from 'path';
-import os from 'os';
-import fs from 'fs';
-import sqlite3 from 'sqlite3';
-import { open } from 'sqlite';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const express = require('express');
+const fs = require('fs');
+const path = require('path');
+const multer = require('multer');
+const cors = require('cors');
+const { exec } = require('child_process');
+const { createServer: createViteServer } = require('vite');
 
-// Setup SQLite database
-const dbPath = path.join(__dirname, 'ansible.db');
-let db;
-
-// Initialize database connection
-async function initializeDatabase() {
-  try {
-    console.log(`Initializing SQLite database at ${dbPath}`);
-    db = await open({
-      filename: dbPath,
-      driver: sqlite3.Database
-    });
-    
-    // Create tables if they don't exist
-    await db.exec(`
-      CREATE TABLE IF NOT EXISTS playbook_runs (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        status TEXT NOT NULL,
-        timestamp TEXT NOT NULL
-      );
-      
-      CREATE TABLE IF NOT EXISTS ansible_stats (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        timestamp TEXT NOT NULL,
-        playbooks INTEGER NOT NULL,
-        inventories INTEGER NOT NULL,
-        roles INTEGER NOT NULL,
-        hosts INTEGER NOT NULL,
-        cpu TEXT NOT NULL,
-        memory TEXT NOT NULL,
-        disk TEXT NOT NULL
-      );
-    `);
-    
-    console.log(`SQLite database initialized at ${dbPath}`);
-    return db;
-  } catch (error) {
-    console.error(`Database initialization error:`, error);
-    throw error;
-  }
-}
-
-// Output Ansible directory configuration
-console.log('Ansible directories configuration:');
-console.log(`- Playbooks: ${process.env.ANSIBLE_PLAYBOOKS_DIR || '/etc/ansible/playbooks'}`);
-console.log(`- Inventories: ${process.env.ANSIBLE_INVENTORIES_DIR || '/etc/ansible/inventories'}`);
-console.log(`- Roles: ${process.env.ANSIBLE_ROLES_DIR || '/etc/ansible/roles'}`);
-
-// Try to import from the lib directory first, then fall back to compiled JS
-let ansibleService;
-try {
-  // First try importing from the lib directory (JavaScript)
-  console.log('Attempting to load ansible-service.js from lib directory');
-  ansibleService = await import('./lib/ansible-service.js');
-  console.log('Successfully loaded ansible-service.js from lib directory');
-} catch (libError) {
-  console.error('Could not load ansible-service.js from lib directory:', libError.message);
-  console.error(libError.stack);
-  
-  try {
-    // Try importing from the src/lib directory (TypeScript compiled)
-    console.log('Attempting to load ansible-service.js from src/lib directory');
-    ansibleService = await import('./src/lib/ansible-service.js');
-    console.log('Successfully loaded ansible-service.js from src/lib directory');
-  } catch (srcError) {
-    console.error('Could not load ansible-service.js from src/lib:', srcError.message);
-    console.error(srcError.stack);
-    
-    // Simple mocked implementations for testing
-    console.warn('Using simplified implementation');
-    ansibleService = {
-      getPlaybooks: async () => {
-        console.log('Mock: getPlaybooks called');
-        return [];
-      },
-      getInventories: async () => {
-        console.log('Mock: getInventories called');
-        return [];
-      },
-      getRoles: async () => {
-        console.log('Mock: getRoles called');
-        return [];
-      },
-      getHosts: async () => {
-        console.log('Mock: getHosts called');
-        return [];
-      },
-      getDashboardStats: async () => {
-        console.log('Mock: getDashboardStats called');
-        return {
-          playbooks: 0,
-          inventories: 0,
-          roles: 0,
-          hosts: 0,
-          recentRuns: [],
-          system: { cpu: '0%', memory: '0%', disk: '0%' }
-        };
-      },
-      savePlaybook: async (playbook) => {
-        console.log('Mock: savePlaybook called', playbook);
-        return { ...playbook, id: 'mock-id' };
-      },
-      saveInventory: async (inventory) => {
-        console.log('Mock: saveInventory called', inventory);
-        return { ...inventory, id: 'mock-id' };
-      },
-      createRole: async (role) => {
-        console.log('Mock: createRole called', role);
-        return { ...role, id: 'mock-id' };
-      },
-      executePlaybook: async (playbookId, inventoryId) => {
-        console.log('Mock: executePlaybook called', { playbookId, inventoryId });
-        return { id: 'mock-run-id', status: 'success' };
-      },
-      addHostToInventory: async (inventoryId, host) => {
-        console.log('Mock: addHostToInventory called', { inventoryId, host });
-        return true;
-      }
-    };
-  }
-}
-
-const {
-  getPlaybooks,
-  getInventories,
-  getRoles,
-  getHosts, 
-  getDashboardStats,
-  savePlaybook,
-  saveInventory,
-  createRole,
-  executePlaybook,
-  addHostToInventory
-} = ansibleService;
-
+// Create Express app
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Configure middleware
+// Middleware
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json());
 
-// Add some basic logging middleware
-app.use((req, res, next) => {
-  const start = Date.now();
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.url} - Request started`);
-  
-  res.on('finish', () => {
-    const duration = Date.now() - start;
-    console.log(`${new Date().toISOString()} - ${req.method} ${req.url} - Response: ${res.statusCode} - ${duration}ms`);
+// Configure multer for file uploads
+const upload = multer({ storage: multer.memoryStorage() });
+
+// Utility function for executing commands
+const execCommand = (cmd) => {
+  return new Promise((resolve, reject) => {
+    exec(cmd, (error, stdout, stderr) => {
+      if (error) {
+        console.error(`Error executing command: ${error.message}`);
+        reject(error);
+        return;
+      }
+      if (stderr) {
+        console.warn(`Command stderr: ${stderr}`);
+      }
+      resolve(stdout.trim());
+    });
   });
-  
-  next();
-});
+};
 
-// Save playbook run to database
-async function savePlaybookRun(run) {
-  if (!db) return;
-  
-  try {
-    console.log(`Saving playbook run to database: ${JSON.stringify(run)}`);
-    await db.run(
-      'INSERT OR REPLACE INTO playbook_runs (id, name, status, timestamp) VALUES (?, ?, ?, ?)',
-      [run.id, run.name, run.status, run.timestamp || new Date().toISOString()]
-    );
-  } catch (error) {
-    console.error('Error saving playbook run to database:', error);
-  }
-}
+// Format file size for display
+const formatFileSize = (bytes) => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
 
-// Get recent runs from database
-async function getRecentRunsFromDB() {
-  if (!db) return [];
-  
+// API endpoint to list files in a directory
+app.get('/api/files', async (req, res) => {
   try {
-    return await db.all(
-      'SELECT * FROM playbook_runs ORDER BY timestamp DESC LIMIT 5'
-    );
-  } catch (error) {
-    console.error('Error fetching recent runs from database:', error);
-    return [];
-  }
-}
-
-// Save dashboard stats to database
-async function saveDashboardStats(stats) {
-  if (!db) return;
-  
-  try {
-    await db.run(
-      'INSERT INTO ansible_stats (timestamp, playbooks, inventories, roles, hosts, cpu, memory, disk) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [
-        new Date().toISOString(),
-        stats.playbooks,
-        stats.inventories,
-        stats.roles,
-        stats.hosts,
-        stats.system.cpu,
-        stats.system.memory,
-        stats.system.disk
-      ]
-    );
-  } catch (error) {
-    console.error('Error saving dashboard stats to database:', error);
-  }
-}
-
-// Dashboard stats
-app.get('/api/dashboard', async (req, res) => {
-  try {
-    console.log('Fetching dashboard stats...');
-    const stats = await getDashboardStats();
-    console.log('Dashboard stats fetched:', stats);
+    const directoryPath = req.query.path || '/etc/ansible';
+    const searchQuery = req.query.search || '';
     
-    // Replace recent runs with data from database if available
-    const dbRuns = await getRecentRunsFromDB();
-    if (dbRuns.length > 0) {
-      stats.recentRuns = dbRuns;
+    if (!fs.existsSync(directoryPath)) {
+      return res.status(404).json({ message: `Directory does not exist: ${directoryPath}` });
     }
     
-    // Save stats to database for historical tracking
-    await saveDashboardStats(stats);
+    const files = await fs.promises.readdir(directoryPath);
+    const fileItems = [];
     
-    res.json(stats);
-  } catch (error) {
-    console.error('Error fetching dashboard stats:', error);
-    res.status(500).json({ error: 'Failed to fetch dashboard statistics' });
-  }
-});
-
-// Playbooks
-app.get('/api/playbooks', async (req, res) => {
-  try {
-    console.log('Fetching playbooks...');
-    const playbooks = await getPlaybooks();
-    console.log(`Fetched ${playbooks.length} playbooks`);
-    res.json(playbooks);
-  } catch (error) {
-    console.error('Error fetching playbooks:', error);
-    res.status(500).json({ error: 'Failed to fetch playbooks' });
-  }
-});
-
-app.post('/api/playbooks', async (req, res) => {
-  try {
-    const playbook = await savePlaybook(req.body);
-    res.json(playbook);
-  } catch (error) {
-    console.error('Error saving playbook:', error);
-    res.status(500).json({ error: 'Failed to save playbook' });
-  }
-});
-
-// Inventories
-app.get('/api/inventories', async (req, res) => {
-  try {
-    console.log('Fetching inventories...');
-    const inventories = await getInventories();
-    console.log(`Fetched ${inventories.length} inventories`);
-    res.json(inventories);
-  } catch (error) {
-    console.error('Error fetching inventories:', error);
-    res.status(500).json({ error: 'Failed to fetch inventories' });
-  }
-});
-
-app.post('/api/inventories', async (req, res) => {
-  try {
-    const inventory = await saveInventory(req.body);
-    res.json(inventory);
-  } catch (error) {
-    console.error('Error saving inventory:', error);
-    res.status(500).json({ error: 'Failed to save inventory' });
-  }
-});
-
-// Roles
-app.get('/api/roles', async (req, res) => {
-  try {
-    console.log('Fetching roles...');
-    const roles = await getRoles();
-    console.log(`Fetched ${roles.length} roles`);
-    res.json(roles);
-  } catch (error) {
-    console.error('Error fetching roles:', error);
-    res.status(500).json({ error: 'Failed to fetch roles' });
-  }
-});
-
-app.post('/api/roles', async (req, res) => {
-  try {
-    const role = await createRole(req.body);
-    res.json(role);
-  } catch (error) {
-    console.error('Error creating role:', error);
-    res.status(500).json({ error: 'Failed to create role' });
-  }
-});
-
-// Hosts
-app.get('/api/hosts', async (req, res) => {
-  try {
-    console.log('Fetching hosts...');
-    const hosts = await getHosts();
-    console.log(`Fetched ${hosts.length} hosts`);
-    res.json(hosts);
-  } catch (error) {
-    console.error('Error fetching hosts:', error);
-    res.status(500).json({ error: 'Failed to fetch hosts' });
-  }
-});
-
-app.post('/api/hosts', async (req, res) => {
-  try {
-    const { inventoryId, host } = req.body;
-    const success = await addHostToInventory(inventoryId, host);
+    for (const file of files) {
+      try {
+        const filePath = path.join(directoryPath, file);
+        const stats = await fs.promises.stat(filePath);
+        
+        if (searchQuery && !file.toLowerCase().includes(searchQuery.toLowerCase())) {
+          continue;
+        }
+        
+        if (stats.isDirectory()) {
+          fileItems.push({
+            id: Buffer.from(filePath).toString('base64'),
+            name: file,
+            type: 'folder',
+            path: filePath,
+            lastModified: stats.mtime.toISOString()
+          });
+        } else {
+          const isTemplate = file.endsWith('.j2') || file.endsWith('.template') || file.endsWith('.tpl');
+          
+          fileItems.push({
+            id: Buffer.from(filePath).toString('base64'),
+            name: file,
+            type: isTemplate ? 'template' : 'file',
+            path: filePath,
+            size: formatFileSize(stats.size),
+            lastModified: stats.mtime.toISOString()
+          });
+        }
+      } catch (fileError) {
+        console.error(`Error processing file ${file}:`, fileError);
+      }
+    }
     
-    if (success) {
-      res.json({ success: true, host });
+    fileItems.sort((a, b) => {
+      if (a.type === 'folder' && b.type !== 'folder') return -1;
+      if (a.type !== 'folder' && b.type === 'folder') return 1;
+      return a.name.localeCompare(b.name);
+    });
+    
+    res.json(fileItems);
+  } catch (error) {
+    console.error('Error listing files:', error);
+    res.status(500).json({ message: `Error listing files: ${error.message}` });
+  }
+});
+
+// API endpoint to read file content
+app.get('/api/files/read', async (req, res) => {
+  try {
+    const filePath = req.query.path;
+    
+    if (!filePath) {
+      return res.status(400).json({ message: 'File path is required' });
+    }
+    
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ message: `File does not exist: ${filePath}` });
+    }
+    
+    const stats = await fs.promises.stat(filePath);
+    
+    if (stats.isDirectory()) {
+      return res.status(400).json({ message: 'Cannot read content of a directory' });
+    }
+    
+    const content = await fs.promises.readFile(filePath, 'utf8');
+    
+    res.json({ content });
+  } catch (error) {
+    console.error('Error reading file:', error);
+    res.status(500).json({ message: `Error reading file: ${error.message}` });
+  }
+});
+
+// API endpoint to write file content
+app.post('/api/files/write', async (req, res) => {
+  try {
+    const { path: filePath, content } = req.body;
+    
+    if (!filePath) {
+      return res.status(400).json({ message: 'File path is required' });
+    }
+    
+    // Ensure directory exists
+    await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+    
+    await fs.promises.writeFile(filePath, content, 'utf8');
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error writing file:', error);
+    res.status(500).json({ message: `Error writing file: ${error.message}` });
+  }
+});
+
+// API endpoint to create directory
+app.post('/api/files/mkdir', async (req, res) => {
+  try {
+    const { path: dirPath } = req.body;
+    
+    if (!dirPath) {
+      return res.status(400).json({ message: 'Directory path is required' });
+    }
+    
+    await fs.promises.mkdir(dirPath, { recursive: true });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error creating directory:', error);
+    res.status(500).json({ message: `Error creating directory: ${error.message}` });
+  }
+});
+
+// API endpoint to delete file or directory
+app.delete('/api/files/delete', async (req, res) => {
+  try {
+    const { path: itemPath, isDirectory } = req.body;
+    
+    if (!itemPath) {
+      return res.status(400).json({ message: 'Item path is required' });
+    }
+    
+    if (!fs.existsSync(itemPath)) {
+      return res.status(404).json({ message: `Item does not exist: ${itemPath}` });
+    }
+    
+    if (isDirectory) {
+      await fs.promises.rmdir(itemPath, { recursive: true });
     } else {
-      res.status(500).json({ error: 'Failed to add host to inventory' });
-    }
-  } catch (error) {
-    console.error('Error adding host:', error);
-    res.status(500).json({ error: 'Failed to add host' });
-  }
-});
-
-// Execute playbook
-app.post('/api/execute-playbook', async (req, res) => {
-  try {
-    const { playbookId, inventoryId } = req.body;
-    const result = await executePlaybook(playbookId, inventoryId);
-    
-    // Save run to database
-    const playbooks = await getPlaybooks();
-    const playbook = playbooks.find(p => p.id === playbookId);
-    
-    if (playbook) {
-      await savePlaybookRun({
-        id: result.id,
-        name: playbook.name,
-        status: result.status,
-        timestamp: new Date().toISOString()
-      });
-    }
-    
-    res.json(result);
-  } catch (error) {
-    console.error('Error executing playbook:', error);
-    res.status(500).json({ error: 'Failed to execute playbook' });
-  }
-});
-
-// New endpoint to stream playbook execution logs
-app.get('/api/execution-logs/:executionId', (req, res) => {
-  const executionId = req.params.executionId;
-  
-  // Set up SSE (Server-Sent Events)
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  
-  // Mock log generation for demo purposes
-  // In production, you'd tail the actual Ansible log file
-  let logIndex = 0;
-  const mockLogs = [
-    "PLAY [Example Playbook] ********************************************************",
-    "TASK [Gathering Facts] *********************************************************",
-    "ok: [server1.example.com]",
-    "ok: [server2.example.com]",
-    "TASK [Install required packages] ***********************************************",
-    "changed: [server1.example.com]",
-    "changed: [server2.example.com]",
-    "TASK [Start services] **********************************************************",
-    "changed: [server1.example.com]",
-    "changed: [server2.example.com]",
-    "PLAY RECAP *********************************************************************",
-    "server1.example.com : ok=3 changed=2 unreachable=0 failed=0 skipped=0",
-    "server2.example.com : ok=3 changed=2 unreachable=0 failed=0 skipped=0"
-  ];
-  
-  // Send logs at intervals
-  const intervalId = setInterval(() => {
-    if (logIndex < mockLogs.length) {
-      res.write(`data: ${JSON.stringify({ log: mockLogs[logIndex] })}\n\n`);
-      logIndex++;
-    } else {
-      res.write(`data: ${JSON.stringify({ complete: true })}\n\n`);
-      clearInterval(intervalId);
-      res.end();
-    }
-  }, 1000);
-  
-  // Handle client disconnect
-  req.on('close', () => {
-    clearInterval(intervalId);
-    res.end();
-  });
-});
-
-// Configuration management
-app.post('/api/configuration', async (req, res) => {
-  try {
-    const { type, settings } = req.body;
-    console.log(`Saving ${type} configuration:`, settings);
-    
-    // Store configuration in the database
-    if (db) {
-      await db.run(
-        'INSERT OR REPLACE INTO configurations (type, settings, timestamp) VALUES (?, ?, ?)',
-        [type, JSON.stringify(settings), new Date().toISOString()]
-      );
-    }
-    
-    // If custom paths are provided, store them as environment variables
-    if (type === 'custom' && settings) {
-      if (settings.customPlaybooksDir) {
-        process.env.ANSIBLE_PLAYBOOKS_DIR = settings.customPlaybooksDir;
-      }
-      if (settings.customInventoriesDir) {
-        process.env.ANSIBLE_INVENTORIES_DIR = settings.customInventoriesDir;
-      }
-      if (settings.customRolesDir) {
-        process.env.ANSIBLE_ROLES_DIR = settings.customRolesDir;
-      }
-      
-      console.log('Updated Ansible directories:');
-      console.log(`- Playbooks: ${process.env.ANSIBLE_PLAYBOOKS_DIR}`);
-      console.log(`- Inventories: ${process.env.ANSIBLE_INVENTORIES_DIR}`);
-      console.log(`- Roles: ${process.env.ANSIBLE_ROLES_DIR}`);
+      await fs.promises.unlink(itemPath);
     }
     
     res.json({ success: true });
   } catch (error) {
-    console.error('Error saving configuration:', error);
-    res.status(500).json({ error: 'Failed to save configuration' });
+    console.error('Error deleting item:', error);
+    res.status(500).json({ message: `Error deleting item: ${error.message}` });
   }
 });
 
-app.get('/api/configuration/:type', async (req, res) => {
+// API endpoint to upload file
+app.post('/api/files/upload', upload.single('file'), async (req, res) => {
   try {
-    const type = req.params.type;
-    
-    if (db) {
-      const config = await db.get(
-        'SELECT settings FROM configurations WHERE type = ? ORDER BY timestamp DESC LIMIT 1',
-        [type]
-      );
-      
-      if (config) {
-        res.json(JSON.parse(config.settings));
-      } else {
-        res.json({});
-      }
-    } else {
-      res.json({});
-    }
-  } catch (error) {
-    console.error('Error fetching configuration:', error);
-    res.status(500).json({ error: 'Failed to fetch configuration' });
-  }
-});
-
-// Test connection to remote server
-app.post('/api/test-connection', async (req, res) => {
-  try {
-    const serverDetails = req.body;
-    console.log('Testing connection to server:', serverDetails);
-    
-    // Implement actual connection test logic here
-    // For now, return success
-    res.json({ success: true, message: 'Connection successful' });
-  } catch (error) {
-    console.error('Error testing connection:', error);
-    res.status(500).json({ success: false, message: 'Connection failed' });
-  }
-});
-
-// Export data to local paths
-app.post('/api/export-to-local', async (req, res) => {
-  try {
-    const { data, type } = req.body;
-    console.log(`Exporting ${type} data to local path`);
-    
-    // Get custom path from database or environment
-    let exportPath;
-    
-    if (type === 'hosts' || type === 'groups') {
-      exportPath = process.env.ANSIBLE_INVENTORIES_DIR || '/etc/ansible/inventories';
-    } else if (type === 'playbooks') {
-      exportPath = process.env.ANSIBLE_PLAYBOOKS_DIR || '/etc/ansible/playbooks';
-    } else if (type === 'roles') {
-      exportPath = process.env.ANSIBLE_ROLES_DIR || '/etc/ansible/roles';
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
     }
     
-    // Here you would implement the actual export logic
+    const directoryPath = req.body.directoryPath || '/etc/ansible';
+    const fileName = req.file.originalname;
+    const filePath = path.join(directoryPath, fileName);
     
-    res.json({ success: true, path: exportPath });
+    // Ensure directory exists
+    await fs.promises.mkdir(directoryPath, { recursive: true });
+    
+    // Write the file
+    await fs.promises.writeFile(filePath, req.file.buffer);
+    
+    // Get file stats
+    const stats = await fs.promises.stat(filePath);
+    
+    const isTemplate = fileName.endsWith('.j2') || fileName.endsWith('.template') || fileName.endsWith('.tpl');
+    
+    // Return the new file item
+    const fileItem = {
+      id: Buffer.from(filePath).toString('base64'),
+      name: fileName,
+      type: isTemplate ? 'template' : 'file',
+      path: filePath,
+      size: formatFileSize(req.file.size),
+      lastModified: stats.mtime.toISOString()
+    };
+    
+    res.json(fileItem);
   } catch (error) {
-    console.error('Error exporting data:', error);
-    res.status(500).json({ success: false, error: 'Failed to export data' });
+    console.error('Error uploading file:', error);
+    res.status(500).json({ message: `Error uploading file: ${error.message}` });
   }
 });
 
-// Import data from local paths
-app.post('/api/import-from-local', async (req, res) => {
-  try {
-    const { type, path } = req.body;
-    console.log(`Importing ${type} data from ${path || 'default path'}`);
-    
-    // Here you would implement the actual import logic
-    
-    // Return mock data for now
-    if (type === 'hosts') {
-      res.json([
-        { 
-          id: 'local-1', 
-          name: 'local-host-1.example.com', 
-          groups: ['web_servers', 'local'],
-          variables: { 'ansible_host': '192.168.1.50' }
-        },
-        {
-          id: 'local-2',
-          name: 'local-host-2.example.com',
-          groups: ['db_servers', 'local'],
-          variables: { 'ansible_host': '192.168.1.51' }
-        }
-      ]);
-    } else {
-      res.json({ success: true, message: 'Import completed' });
-    }
-  } catch (error) {
-    console.error('Error importing data:', error);
-    res.status(500).json({ success: false, error: 'Failed to import data' });
-  }
-});
-
-// Serve static files from the React app
-app.use(express.static('dist'));
-
-// Add a health check endpoint
-app.get('/api/health', (req, res) => {
-  res.status(200).json({ status: 'healthy' });
-});
-
-// Task Templates API endpoints
-app.get('/api/task-templates', (req, res) => {
-  // In a real app, this would come from the database
-  const mockTemplates = [
-    {
-      id: "1",
-      name: "Deploy Web Application",
-      description: "Deploy the web application to production servers",
-      type: "deploy",
-      content: "---\n- name: Deploy Web Application\n  hosts: web_servers\n  tasks:\n    - name: Pull latest code\n      git:\n        repo: https://github.com/company/webapp\n        dest: /var/www/html\n\n    - name: Restart web service\n      service:\n        name: nginx\n        state: restarted",
-      lastRun: "2023-09-15T14:30:00Z",
-      status: "success",
-      runs: 24
-    },
-    {
-      id: "2",
-      name: "Build Frontend Assets",
-      description: "Build and minify frontend assets for production",
-      type: "build",
-      content: "---\n- name: Build Frontend\n  hosts: build_servers\n  tasks:\n    - name: Install dependencies\n      npm:\n        path: /var/repo/frontend\n        state: present\n\n    - name: Build assets\n      command:\n        cmd: npm run build\n        chdir: /var/repo/frontend",
-      lastRun: "2023-09-10T11:20:00Z",
-      status: "failed",
-      runs: 18
-    },
-    {
-      id: "3",
-      name: "Database Backup",
-      description: "Create a backup of the production database",
-      type: "backup",
-      content: "---\n- name: Backup Database\n  hosts: db_servers\n  tasks:\n    - name: Create backup directory\n      file:\n        path: /var/backups/db\n        state: directory\n\n    - name: Run pg_dump\n      command:\n        cmd: pg_dump -U postgres -F c main_db > /var/backups/db/main_db_$(date +%Y%m%d).dump",
-      lastRun: "2023-09-14T23:00:00Z",
-      status: "success",
-      runs: 56
-    },
-  ];
-  
-  res.json(mockTemplates);
-});
-
-app.post('/api/task-templates', (req, res) => {
-  // In a real app, this would save to the database
-  const template = req.body;
-  template.id = Math.random().toString(36).substring(2, 10);
-  template.lastRun = new Date().toISOString();
-  template.status = "success";
-  template.runs = 0;
-  
-  res.json(template);
-});
-
-app.post('/api/task-templates/:id/run', (req, res) => {
-  // In a real app, this would execute the template
-  const templateId = req.params.id;
-  
-  res.json({
-    executionId: Math.random().toString(36).substring(2, 10),
-    status: "running"
+// Development server setup with Vite
+async function createServer() {
+  // Create Vite server in middleware mode
+  const vite = await createViteServer({
+    server: { middlewareMode: true },
+    appType: 'spa',
   });
-});
 
-// Catch-all route to return the main index.html for client-side routing
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
-});
+  // Use vite's connect instance as middleware
+  app.use(vite.middlewares);
 
-// Start the server after initializing the database
-initializeDatabase().then(() => {
+  // Start the server
   app.listen(PORT, () => {
-    console.log(`
-  ============================================
-  🚀 Ansible UI Server running on port ${PORT} 🚀
-  
-  Local:            http://localhost:${PORT}
-  Network:          http://${getLocalIpAddress()}:${PORT}
-  
-  Database:         ${dbPath}
-  Playbooks dir:    ${process.env.ANSIBLE_PLAYBOOKS_DIR || '/etc/ansible/playbooks'}
-  Inventories:      ${process.env.ANSIBLE_INVENTORIES_DIR || '/etc/ansible/inventories'}
-  Roles:            ${process.env.ANSIBLE_ROLES_DIR || '/etc/ansible/roles'}
-  ============================================
-  `);
+    console.log(`Server is running on port ${PORT}`);
   });
-}).catch(error => {
-  console.error('Failed to initialize database:', error);
-  process.exit(1);
-});
-
-// Helper function to get the local IP address
-function getLocalIpAddress() {
-  const nets = os.networkInterfaces();
-  
-  for (const name of Object.keys(nets)) {
-    for (const net of nets[name]) {
-      // Skip over non-IPv4 and internal (i.e. 127.0.0.1) addresses
-      if (net.family === 'IPv4' && !net.internal) {
-        return net.address;
-      }
-    }
-  }
-  
-  return 'localhost';
 }
+
+// Start the server
+createServer().catch((err) => {
+  console.error('Error starting server:', err);
+});
