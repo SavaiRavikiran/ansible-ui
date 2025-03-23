@@ -7,6 +7,18 @@ import cors from 'cors';
 import { exec } from 'child_process';
 import { createServer as createViteServer } from 'vite';
 import { fileURLToPath } from 'url';
+import {
+  getDashboardStats,
+  getPlaybooks,
+  getInventories,
+  getRoles,
+  getHosts,
+  savePlaybook,
+  saveInventory,
+  createRole,
+  executePlaybook,
+  addHostToInventory
+} from './lib/ansible-service.js';
 
 // Get __dirname equivalent in ESM
 const __filename = fileURLToPath(import.meta.url);
@@ -46,6 +58,109 @@ const formatFileSize = (bytes) => {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
+
+// API endpoints for the Ansible UI
+app.get('/api/dashboard', async (req, res) => {
+  try {
+    const stats = await getDashboardStats();
+    res.json(stats);
+  } catch (error) {
+    console.error('Error fetching dashboard stats:', error);
+    res.status(500).json({ message: `Error fetching dashboard stats: ${error.message}` });
+  }
+});
+
+app.get('/api/playbooks', async (req, res) => {
+  try {
+    const playbooks = await getPlaybooks();
+    res.json(playbooks);
+  } catch (error) {
+    console.error('Error fetching playbooks:', error);
+    res.status(500).json({ message: `Error fetching playbooks: ${error.message}` });
+  }
+});
+
+app.get('/api/inventories', async (req, res) => {
+  try {
+    const inventories = await getInventories();
+    res.json(inventories);
+  } catch (error) {
+    console.error('Error fetching inventories:', error);
+    res.status(500).json({ message: `Error fetching inventories: ${error.message}` });
+  }
+});
+
+app.get('/api/roles', async (req, res) => {
+  try {
+    const roles = await getRoles();
+    res.json(roles);
+  } catch (error) {
+    console.error('Error fetching roles:', error);
+    res.status(500).json({ message: `Error fetching roles: ${error.message}` });
+  }
+});
+
+app.get('/api/hosts', async (req, res) => {
+  try {
+    const hosts = await getHosts();
+    res.json(hosts);
+  } catch (error) {
+    console.error('Error fetching hosts:', error);
+    res.status(500).json({ message: `Error fetching hosts: ${error.message}` });
+  }
+});
+
+app.post('/api/playbooks', async (req, res) => {
+  try {
+    const playbook = await savePlaybook(req.body);
+    res.json(playbook);
+  } catch (error) {
+    console.error('Error saving playbook:', error);
+    res.status(500).json({ message: `Error saving playbook: ${error.message}` });
+  }
+});
+
+app.post('/api/inventories', async (req, res) => {
+  try {
+    const inventory = await saveInventory(req.body);
+    res.json(inventory);
+  } catch (error) {
+    console.error('Error saving inventory:', error);
+    res.status(500).json({ message: `Error saving inventory: ${error.message}` });
+  }
+});
+
+app.post('/api/roles', async (req, res) => {
+  try {
+    const role = await createRole(req.body);
+    res.json(role);
+  } catch (error) {
+    console.error('Error creating role:', error);
+    res.status(500).json({ message: `Error creating role: ${error.message}` });
+  }
+});
+
+app.post('/api/hosts', async (req, res) => {
+  try {
+    const { inventoryId, host } = req.body;
+    const success = await addHostToInventory(inventoryId, host);
+    res.json({ success });
+  } catch (error) {
+    console.error('Error adding host:', error);
+    res.status(500).json({ message: `Error adding host: ${error.message}` });
+  }
+});
+
+app.post('/api/execute-playbook', async (req, res) => {
+  try {
+    const { playbookId, inventoryId } = req.body;
+    const result = await executePlaybook(playbookId, inventoryId);
+    res.json(result);
+  } catch (error) {
+    console.error('Error executing playbook:', error);
+    res.status(500).json({ message: `Error executing playbook: ${error.message}` });
+  }
+});
 
 // API endpoint to list files in a directory
 app.get('/api/files', async (req, res) => {
@@ -253,29 +368,28 @@ app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'healthy' });
 });
 
-// Serve static files from the build directory
-app.use(express.static(path.join(__dirname, 'dist')));
-
-// For development: Create Vite server in middleware mode
-async function createDevServer() {
-  // Create Vite server in middleware mode
-  const vite = await createViteServer({
-    server: { middlewareMode: true },
-    appType: 'spa',
-  });
-
-  // Use vite's connect instance as middleware
-  app.use(vite.middlewares);
-}
-
 // Main startup function
 async function startServer() {
   // In development, set up Vite middleware
   if (process.env.NODE_ENV !== 'production') {
-    await createDevServer();
+    try {
+      // Create Vite server in middleware mode
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: 'spa',
+      });
+      
+      // Use vite's connect instance as middleware
+      app.use(vite.middlewares);
+    } catch (error) {
+      console.error('Error creating Vite development server:', error);
+    }
+  } else {
+    // Serve static files from the build directory in production
+    app.use(express.static(path.join(__dirname, 'dist')));
   }
 
-  // For SPA, serve index.html for any route not matched
+  // For SPA, serve index.html for any route not matched by static files or API routes
   app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'dist', 'index.html'));
   });
