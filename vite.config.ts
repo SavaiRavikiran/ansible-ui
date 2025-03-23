@@ -25,4 +25,19 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  // Ensure Node.js built-ins are not bundled
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          // Create a chunk for large dependencies
+          if (id.includes('node_modules')) {
+            // Extract major package name
+            const packageName = id.toString().split('node_modules/')[1].split('/')[0];
+            return `vendor-${packageName}`;
+          }
+        }
+      }
+    }
+  }
 }));

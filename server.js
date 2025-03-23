@@ -1,11 +1,16 @@
 
-const express = require('express');
-const fs = require('fs');
-const path = require('path');
-const multer = require('multer');
-const cors = require('cors');
-const { exec } = require('child_process');
-const { createServer: createViteServer } = require('vite');
+import express from 'express';
+import { promises as fs } from 'fs';
+import path from 'path';
+import multer from 'multer';
+import cors from 'cors';
+import { exec } from 'child_process';
+import { createServer as createViteServer } from 'vite';
+import { fileURLToPath } from 'url';
+
+// Get __dirname equivalent in ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Create Express app
 const app = express();
@@ -48,17 +53,24 @@ app.get('/api/files', async (req, res) => {
     const directoryPath = req.query.path || '/etc/ansible';
     const searchQuery = req.query.search || '';
     
-    if (!fs.existsSync(directoryPath)) {
+    if (!fs.existsSync) {
+      // Use fs.promises.access to check if directory exists
+      try {
+        await fs.access(directoryPath);
+      } catch (error) {
+        return res.status(404).json({ message: `Directory does not exist: ${directoryPath}` });
+      }
+    } else if (!fs.existsSync(directoryPath)) {
       return res.status(404).json({ message: `Directory does not exist: ${directoryPath}` });
     }
     
-    const files = await fs.promises.readdir(directoryPath);
+    const files = await fs.readdir(directoryPath);
     const fileItems = [];
     
     for (const file of files) {
       try {
         const filePath = path.join(directoryPath, file);
-        const stats = await fs.promises.stat(filePath);
+        const stats = await fs.stat(filePath);
         
         if (searchQuery && !file.toLowerCase().includes(searchQuery.toLowerCase())) {
           continue;
@@ -111,17 +123,19 @@ app.get('/api/files/read', async (req, res) => {
       return res.status(400).json({ message: 'File path is required' });
     }
     
-    if (!fs.existsSync(filePath)) {
+    try {
+      await fs.access(filePath);
+    } catch (error) {
       return res.status(404).json({ message: `File does not exist: ${filePath}` });
     }
     
-    const stats = await fs.promises.stat(filePath);
+    const stats = await fs.stat(filePath);
     
     if (stats.isDirectory()) {
       return res.status(400).json({ message: 'Cannot read content of a directory' });
     }
     
-    const content = await fs.promises.readFile(filePath, 'utf8');
+    const content = await fs.readFile(filePath, 'utf8');
     
     res.json({ content });
   } catch (error) {
@@ -140,9 +154,9 @@ app.post('/api/files/write', async (req, res) => {
     }
     
     // Ensure directory exists
-    await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
     
-    await fs.promises.writeFile(filePath, content, 'utf8');
+    await fs.writeFile(filePath, content, 'utf8');
     res.json({ success: true });
   } catch (error) {
     console.error('Error writing file:', error);
@@ -159,7 +173,7 @@ app.post('/api/files/mkdir', async (req, res) => {
       return res.status(400).json({ message: 'Directory path is required' });
     }
     
-    await fs.promises.mkdir(dirPath, { recursive: true });
+    await fs.mkdir(dirPath, { recursive: true });
     res.json({ success: true });
   } catch (error) {
     console.error('Error creating directory:', error);
@@ -176,14 +190,16 @@ app.delete('/api/files/delete', async (req, res) => {
       return res.status(400).json({ message: 'Item path is required' });
     }
     
-    if (!fs.existsSync(itemPath)) {
+    try {
+      await fs.access(itemPath);
+    } catch (error) {
       return res.status(404).json({ message: `Item does not exist: ${itemPath}` });
     }
     
     if (isDirectory) {
-      await fs.promises.rmdir(itemPath, { recursive: true });
+      await fs.rmdir(itemPath, { recursive: true });
     } else {
-      await fs.promises.unlink(itemPath);
+      await fs.unlink(itemPath);
     }
     
     res.json({ success: true });
@@ -205,13 +221,13 @@ app.post('/api/files/upload', upload.single('file'), async (req, res) => {
     const filePath = path.join(directoryPath, fileName);
     
     // Ensure directory exists
-    await fs.promises.mkdir(directoryPath, { recursive: true });
+    await fs.mkdir(directoryPath, { recursive: true });
     
     // Write the file
-    await fs.promises.writeFile(filePath, req.file.buffer);
+    await fs.writeFile(filePath, req.file.buffer);
     
     // Get file stats
-    const stats = await fs.promises.stat(filePath);
+    const stats = await fs.stat(filePath);
     
     const isTemplate = fileName.endsWith('.j2') || fileName.endsWith('.template') || fileName.endsWith('.tpl');
     
@@ -232,8 +248,16 @@ app.post('/api/files/upload', upload.single('file'), async (req, res) => {
   }
 });
 
-// Development server setup with Vite
-async function createServer() {
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'healthy' });
+});
+
+// Serve static files from the build directory
+app.use(express.static(path.join(__dirname, 'dist')));
+
+// For development: Create Vite server in middleware mode
+async function createDevServer() {
   // Create Vite server in middleware mode
   const vite = await createViteServer({
     server: { middlewareMode: true },
@@ -242,14 +266,28 @@ async function createServer() {
 
   // Use vite's connect instance as middleware
   app.use(vite.middlewares);
+}
+
+// Main startup function
+async function startServer() {
+  // In development, set up Vite middleware
+  if (process.env.NODE_ENV !== 'production') {
+    await createDevServer();
+  }
+
+  // For SPA, serve index.html for any route not matched
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+  });
 
   // Start the server
   app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
+    console.log(`Access the application at http://localhost:${PORT}`);
   });
 }
 
 // Start the server
-createServer().catch((err) => {
+startServer().catch((err) => {
   console.error('Error starting server:', err);
 });
