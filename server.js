@@ -1,12 +1,25 @@
-
 import express from 'express';
 import { promises as fs } from 'fs';
 import path from 'path';
 import multer from 'multer';
 import cors from 'cors';
-import { exec } from 'child_process';
-import { createServer as createViteServer } from 'vite';
 import { fileURLToPath } from 'url';
+
+// Import our ansible service functions
+import {
+  getDashboardStats,
+  getPlaybooks,
+  getInventories,
+  getRoles,
+  getHosts,
+  savePlaybook,
+  saveInventory,
+  createRole,
+  addHostToInventory,
+  executePlaybook,
+  getRecentRuns,
+  getSystemInfo
+} from './lib/ansible-service.js';
 
 // Get __dirname equivalent in ESM
 const __filename = fileURLToPath(import.meta.url);
@@ -22,23 +35,6 @@ app.use(express.json());
 
 // Configure multer for file uploads
 const upload = multer({ storage: multer.memoryStorage() });
-
-// Utility function for executing commands
-const execCommand = (cmd) => {
-  return new Promise((resolve, reject) => {
-    exec(cmd, (error, stdout, stderr) => {
-      if (error) {
-        console.error(`Error executing command: ${error.message}`);
-        reject(error);
-        return;
-      }
-      if (stderr) {
-        console.warn(`Command stderr: ${stderr}`);
-      }
-      resolve(stdout.trim());
-    });
-  });
-};
 
 // Format file size for display
 const formatFileSize = (bytes) => {
@@ -248,6 +244,116 @@ app.post('/api/files/upload', upload.single('file'), async (req, res) => {
   }
 });
 
+// NEW API ENDPOINTS FOR ANSIBLE FUNCTIONALITY
+
+// Dashboard stats endpoint
+app.get('/api/dashboard', async (req, res) => {
+  try {
+    const stats = await getDashboardStats();
+    res.json(stats);
+  } catch (error) {
+    console.error('Error getting dashboard stats:', error);
+    res.status(500).json({ message: `Error getting dashboard stats: ${error.message}` });
+  }
+});
+
+// Playbooks endpoints
+app.get('/api/playbooks', async (req, res) => {
+  try {
+    const playbooks = await getPlaybooks();
+    res.json(playbooks);
+  } catch (error) {
+    console.error('Error getting playbooks:', error);
+    res.status(500).json({ message: `Error getting playbooks: ${error.message}` });
+  }
+});
+
+app.post('/api/playbooks', async (req, res) => {
+  try {
+    const playbook = await savePlaybook(req.body);
+    res.json(playbook);
+  } catch (error) {
+    console.error('Error saving playbook:', error);
+    res.status(500).json({ message: `Error saving playbook: ${error.message}` });
+  }
+});
+
+// Inventories endpoints
+app.get('/api/inventories', async (req, res) => {
+  try {
+    const inventories = await getInventories();
+    res.json(inventories);
+  } catch (error) {
+    console.error('Error getting inventories:', error);
+    res.status(500).json({ message: `Error getting inventories: ${error.message}` });
+  }
+});
+
+app.post('/api/inventories', async (req, res) => {
+  try {
+    const inventory = await saveInventory(req.body);
+    res.json(inventory);
+  } catch (error) {
+    console.error('Error saving inventory:', error);
+    res.status(500).json({ message: `Error saving inventory: ${error.message}` });
+  }
+});
+
+// Roles endpoints
+app.get('/api/roles', async (req, res) => {
+  try {
+    const roles = await getRoles();
+    res.json(roles);
+  } catch (error) {
+    console.error('Error getting roles:', error);
+    res.status(500).json({ message: `Error getting roles: ${error.message}` });
+  }
+});
+
+app.post('/api/roles', async (req, res) => {
+  try {
+    const role = await createRole(req.body);
+    res.json(role);
+  } catch (error) {
+    console.error('Error creating role:', error);
+    res.status(500).json({ message: `Error creating role: ${error.message}` });
+  }
+});
+
+// Hosts endpoint
+app.get('/api/hosts', async (req, res) => {
+  try {
+    const hosts = await getHosts();
+    res.json(hosts);
+  } catch (error) {
+    console.error('Error getting hosts:', error);
+    res.status(500).json({ message: `Error getting hosts: ${error.message}` });
+  }
+});
+
+app.post('/api/hosts', async (req, res) => {
+  try {
+    const { inventoryId, host } = req.body;
+    const success = await addHostToInventory(inventoryId, host);
+    res.json({ success });
+  } catch (error) {
+    console.error('Error adding host:', error);
+    res.status(500).json({ message: `Error adding host: ${error.message}` });
+  }
+});
+
+// Execute playbook endpoint
+app.post('/api/execute-playbook', async (req, res) => {
+  try {
+    const { playbookId, inventoryId } = req.body;
+    const result = await executePlaybook(playbookId, inventoryId);
+    res.json(result);
+  } catch (error) {
+    console.error('Error executing playbook:', error);
+    res.status(500).json({ message: `Error executing playbook: ${error.message}` });
+  }
+});
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'healthy' });
@@ -256,38 +362,13 @@ app.get('/api/health', (req, res) => {
 // Serve static files from the build directory
 app.use(express.static(path.join(__dirname, 'dist')));
 
-// For development: Create Vite server in middleware mode
-async function createDevServer() {
-  // Create Vite server in middleware mode
-  const vite = await createViteServer({
-    server: { middlewareMode: true },
-    appType: 'spa',
-  });
-
-  // Use vite's connect instance as middleware
-  app.use(vite.middlewares);
-}
-
-// Main startup function
-async function startServer() {
-  // In development, set up Vite middleware
-  if (process.env.NODE_ENV !== 'production') {
-    await createDevServer();
-  }
-
-  // For SPA, serve index.html for any route not matched
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
-  });
-
-  // Start the server
-  app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-    console.log(`Access the application at http://localhost:${PORT}`);
-  });
-}
+// For SPA, serve index.html for any route not matched
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
 
 // Start the server
-startServer().catch((err) => {
-  console.error('Error starting server:', err);
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+  console.log(`Access the application at http://localhost:${PORT}`);
 });
