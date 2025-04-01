@@ -1,10 +1,7 @@
+
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  getDashboardStats,
-  getRecentRuns,
-  getSystemInfo,
-} from "@/lib/api";
+import { fetchDashboardStats } from "@/lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { MetricCard } from "@/components/MetricCard";
 import { RecentActivity } from "@/components/RecentActivity";
@@ -21,7 +18,7 @@ const Dashboard = () => {
     refetch,
   } = useQuery({
     queryKey: ["dashboard-stats"],
-    queryFn: getDashboardStats,
+    queryFn: fetchDashboardStats,
     retry: 1,
   });
 
@@ -97,7 +94,7 @@ const Dashboard = () => {
           Please check your network connection and try again.
         </p>
         <button
-          onClick={refetch}
+          onClick={() => refetch()}
           className="bg-primary text-primary-foreground rounded-md px-4 py-2 mt-4 hover:bg-primary/80"
         >
           Retry
@@ -191,29 +188,29 @@ const Dashboard = () => {
       <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           title="Playbooks"
-          value={dashboardStats.playbooks}
+          value={dashboardStats?.playbooks || 0}
           description="Total number of Ansible playbooks"
         />
         <MetricCard
           title="Inventories"
-          value={dashboardStats.inventories}
+          value={dashboardStats?.inventories || 0}
           description="Total number of Ansible inventories"
         />
         <MetricCard
           title="Roles"
-          value={dashboardStats.roles}
+          value={dashboardStats?.roles || 0}
           description="Total number of Ansible roles"
         />
         <MetricCard
           title="Hosts"
-          value={dashboardStats.hosts}
+          value={dashboardStats?.hosts || 0}
           description="Total number of hosts managed by Ansible"
         />
       </div>
 
       <div className="grid gap-4 grid-cols-1 lg:grid-cols-2 mt-6">
-        <RecentActivity recentRuns={dashboardStats.recentRuns} />
-        <SystemStats system={dashboardStats.system} />
+        <RecentActivity recentRuns={dashboardStats?.recentRuns || []} />
+        <SystemStats system={dashboardStats?.system || { cpu: '0%', memory: '0%', disk: '0%' }} />
       </div>
     </div>
   );
