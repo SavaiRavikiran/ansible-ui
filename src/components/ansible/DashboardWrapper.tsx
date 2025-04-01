@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import Dashboard from "@/pages/Dashboard";
 import NoAnsibleResources from "./NoAnsibleResources";
@@ -54,16 +55,28 @@ const DashboardWrapper: React.FC = () => {
     queryKey: ['ansible-status'],
     queryFn: checkAnsibleStatus,
     retry: 1,
-    onSuccess: (data) => {
-      if (data && !data.available) {
-        toast.warning('Ansible is not installed or not accessible');
-      }
-    },
-    onError: (error) => {
-      console.error('Error checking Ansible status:', error);
-      toast.error('Could not verify Ansible installation');
-    }
+    gcTime: 0
   });
+
+  // Monitor the query result and show appropriate toasts
+  useEffect(() => {
+    if (ansibleStatus && !ansibleStatus.available) {
+      toast.warning('Ansible is not installed or not accessible');
+    }
+  }, [ansibleStatus]);
+
+  // Handle errors for the query
+  useEffect(() => {
+    const handleQueryError = () => {
+      console.error('Error checking Ansible status');
+      toast.error('Could not verify Ansible installation');
+    };
+    
+    // If the query has failed, show the error toast
+    if (isLoadingStatus === false && !ansibleStatus) {
+      handleQueryError();
+    }
+  }, [ansibleStatus, isLoadingStatus]);
 
   const searchResourcesMutation = useMutation({
     mutationFn: searchAnsibleResources,
@@ -107,8 +120,8 @@ const DashboardWrapper: React.FC = () => {
       try {
         const defaultPaths = [
           '/etc/ansible',
-          `${process.env.HOME}/ansible`,
-          process.env.ANSIBLE_CONFIG && process.env.ANSIBLE_CONFIG.split('/ansible.cfg')[0]
+          `${window.HOME}/ansible`,
+          window.ANSIBLE_CONFIG && window.ANSIBLE_CONFIG.split('/ansible.cfg')[0]
         ].filter(Boolean);
         
         for (const path of defaultPaths) {
