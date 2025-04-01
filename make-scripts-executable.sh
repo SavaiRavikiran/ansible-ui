@@ -1,6 +1,7 @@
 
-#!/bin/sh
-chmod +x run-ansible-ui.sh
-chmod +x test-locally.sh
-chmod +x dev.sh
-echo "Made scripts executable."
+#!/bin/bash
+
+# Make all shell scripts executable
+chmod +x *.sh
+
+echo "All shell scripts are now executable."

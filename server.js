@@ -1,4 +1,3 @@
-
 import express from 'express';
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -530,6 +529,35 @@ app.post('/api/files/upload', upload.single('file'), async (req, res) => {
   } catch (error) {
     console.error('Error uploading file:', error);
     res.status(500).json({ message: `Error uploading file: ${error.message}` });
+  }
+});
+
+// API endpoint to update Ansible paths
+app.post('/api/update-paths', async (req, res) => {
+  try {
+    const { ANSIBLE_PLAYBOOKS_DIR, ANSIBLE_INVENTORIES_DIR, ANSIBLE_ROLES_DIR } = req.body;
+    
+    if (ANSIBLE_PLAYBOOKS_DIR) process.env.ANSIBLE_PLAYBOOKS_DIR = ANSIBLE_PLAYBOOKS_DIR;
+    if (ANSIBLE_INVENTORIES_DIR) process.env.ANSIBLE_INVENTORIES_DIR = ANSIBLE_INVENTORIES_DIR;
+    if (ANSIBLE_ROLES_DIR) process.env.ANSIBLE_ROLES_DIR = ANSIBLE_ROLES_DIR;
+    
+    console.log("Updated Ansible paths:");
+    console.log(`- Playbooks: ${process.env.ANSIBLE_PLAYBOOKS_DIR}`);
+    console.log(`- Inventories: ${process.env.ANSIBLE_INVENTORIES_DIR}`);
+    console.log(`- Roles: ${process.env.ANSIBLE_ROLES_DIR}`);
+    
+    res.json({
+      success: true,
+      message: "Paths updated successfully",
+      paths: {
+        playbooks: process.env.ANSIBLE_PLAYBOOKS_DIR,
+        inventories: process.env.ANSIBLE_INVENTORIES_DIR,
+        roles: process.env.ANSIBLE_ROLES_DIR
+      }
+    });
+  } catch (error) {
+    console.error('Error updating paths:', error);
+    res.status(500).json({ message: `Error updating paths: ${error.message}` });
   }
 });
 

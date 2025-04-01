@@ -8,9 +8,15 @@ services:
     volumes:
       - ./lib:/app/lib
       - ./ansible.db:/app/ansible.db
-      - ansible-playbooks:/etc/ansible/playbooks
-      - ansible-inventories:/etc/ansible/inventories
-      - ansible-roles:/etc/ansible/roles
+      - type: bind
+        source: ${ANSIBLE_PLAYBOOKS_DIR:-./dev-ansible/playbooks}
+        target: /etc/ansible/playbooks
+      - type: bind
+        source: ${ANSIBLE_INVENTORIES_DIR:-./dev-ansible/inventories}
+        target: /etc/ansible/inventories
+      - type: bind
+        source: ${ANSIBLE_ROLES_DIR:-./dev-ansible/roles}
+        target: /etc/ansible/roles
     environment:
       - PORT=3001
       - NODE_ENV=production
@@ -24,11 +30,3 @@ services:
       timeout: 5s
       retries: 3
       start_period: 5s
-
-volumes:
-  ansible-playbooks:
-    driver: local
-  ansible-inventories:
-    driver: local
-  ansible-roles:
-    driver: local

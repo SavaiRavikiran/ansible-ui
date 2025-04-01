@@ -12,14 +12,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/components/ui/use-toast";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { saveConfiguration } from "@/lib/api";
 import { motion } from "framer-motion";
-import { RotateCw } from "lucide-react";
+import { RotateCw, FolderOpen } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function Settings() {
   const [isLoading, setIsLoading] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanResult, setScanResult] = useState<any>(null);
+  
   const [generalSettings, setGeneralSettings] = useState({
     appName: "Ansible UI",
     defaultInventory: "production",
@@ -37,7 +41,19 @@ export default function Settings() {
     customPlaybooksDir: "",
     customInventoriesDir: "",
     customRolesDir: "",
+    serverConnectionInfo: "",
   });
+
+  // Load settings from localStorage on initial render
+  useEffect(() => {
+    const savedGeneralSettings = localStorage.getItem('generalSettings');
+    const savedConnectionSettings = localStorage.getItem('connectionSettings');
+    const savedCustomSettings = localStorage.getItem('customSettings');
+    
+    if (savedGeneralSettings) setGeneralSettings(JSON.parse(savedGeneralSettings));
+    if (savedConnectionSettings) setConnectionSettings(JSON.parse(savedConnectionSettings));
+    if (savedCustomSettings) setCustomSettings(JSON.parse(savedCustomSettings));
+  }, []);
 
   const handleSaveGeneralSettings = async () => {
     setIsLoading(true);
@@ -46,6 +62,7 @@ export default function Settings() {
         type: "general",
         settings: generalSettings
       });
+      localStorage.setItem('generalSettings', JSON.stringify(generalSettings));
       toast({
         title: "Settings saved",
         description: "Your general settings have been updated.",
@@ -69,6 +86,7 @@ export default function Settings() {
         type: "connection",
         settings: connectionSettings
       });
+      localStorage.setItem('connectionSettings', JSON.stringify(connectionSettings));
       toast({
         title: "Connection settings saved",
         description: "Your Ansible connection settings have been updated.",
@@ -92,6 +110,35 @@ export default function Settings() {
         type: "custom",
         settings: customSettings
       });
+      localStorage.setItem('customSettings', JSON.stringify(customSettings));
+      
+      // Update environment variables for the backend via API
+      try {
+        const response = await fetch('/api/update-paths', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            ANSIBLE_PLAYBOOKS_DIR: customSettings.customPlaybooksDir || undefined,
+            ANSIBLE_INVENTORIES_DIR: customSettings.customInventoriesDir || undefined,
+            ANSIBLE_ROLES_DIR: customSettings.customRolesDir || undefined
+          })
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success) {
+            toast({
+              title: "Path settings updated",
+              description: "The application will use your custom paths. You may need to refresh to see changes.",
+            });
+          }
+        }
+      } catch (pathError) {
+        console.error("Error updating paths:", pathError);
+      }
+      
       toast({
         title: "Custom path settings saved",
         description: "Your custom path settings have been updated.",
@@ -108,6 +155,86 @@ export default function Settings() {
     }
   };
 
+  const scanForAnsibleResources = async () => {
+    if (!customSettings.customPlaybooksDir) {
+      toast({
+        title: "Path required",
+        description: "Please enter a path to scan for Ansible resources.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setIsScanning(true);
+    setScanResult(null);
+    
+    try {
+      const response = await fetch('/api/search-ansible-resources', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          customPath: customSettings.customPlaybooksDir
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Server responded with ${response.status}`);
+      }
+      
+      const result = await response.json();
+      setScanResult(result);
+      
+      if (result.exists) {
+        if (result.hasAnsibleResources) {
+          // If resources are found, populate the other fields
+          const updatedSettings = { ...customSettings };
+          
+          if (result.resources.playbooks) {
+            updatedSettings.customPlaybooksDir = customSettings.customPlaybooksDir;
+          }
+          
+          if (result.resources.inventories) {
+            updatedSettings.customInventoriesDir = customSettings.customPlaybooksDir + '/inventories';
+          }
+          
+          if (result.resources.roles) {
+            updatedSettings.customRolesDir = customSettings.customPlaybooksDir + '/roles';
+          }
+          
+          setCustomSettings(updatedSettings);
+          
+          toast({
+            title: "Ansible resources found",
+            description: "Found Ansible resources in the specified directory.",
+          });
+        } else {
+          toast({
+            title: "No Ansible resources found",
+            description: "The directory exists but no Ansible resources were detected.",
+            variant: "destructive"
+          });
+        }
+      } else {
+        toast({
+          title: "Directory not found",
+          description: "The specified directory does not exist.",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error("Error scanning for Ansible resources:", error);
+      toast({
+        title: "Error scanning",
+        description: "There was an error scanning for Ansible resources.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
   return (
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
@@ -117,7 +244,7 @@ export default function Settings() {
     >
       <h1 className="text-3xl font-bold tracking-tight mb-6">Settings</h1>
 
-      <Tabs defaultValue="general" className="animate-fade-in">
+      <Tabs defaultValue="custom-paths" className="animate-fade-in">
         <TabsList className="grid w-full grid-cols-3 mb-6">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="connection">Connection</TabsTrigger>
@@ -249,6 +376,53 @@ export default function Settings() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="flex items-end gap-2 mb-4">
+                <div className="flex-1 space-y-2">
+                  <Label htmlFor="scan-path">Scan for Ansible Project</Label>
+                  <Input 
+                    id="scan-path" 
+                    value={customSettings.customPlaybooksDir}
+                    onChange={(e) => setCustomSettings({...customSettings, customPlaybooksDir: e.target.value})}
+                    placeholder="/path/to/ansible/project"
+                  />
+                </div>
+                <Button 
+                  onClick={scanForAnsibleResources} 
+                  disabled={isScanning}
+                  className="mb-0.5"
+                >
+                  {isScanning ? (
+                    <>
+                      <RotateCw className="mr-2 h-4 w-4 animate-spin" />
+                      Scanning...
+                    </>
+                  ) : (
+                    <>
+                      <FolderOpen className="mr-2 h-4 w-4" />
+                      Scan
+                    </>
+                  )}
+                </Button>
+              </div>
+              
+              {scanResult && scanResult.exists && scanResult.hasAnsibleResources && (
+                <Alert className="bg-green-50 mb-4 border-green-200">
+                  <AlertDescription className="text-green-700">
+                    Ansible resources detected! Playbooks: {scanResult.resources.playbooks ? "✓" : "✗"}, 
+                    Inventories: {scanResult.resources.inventories ? "✓" : "✗"}, 
+                    Roles: {scanResult.resources.roles ? "✓" : "✗"}
+                  </AlertDescription>
+                </Alert>
+              )}
+              
+              {scanResult && scanResult.exists && !scanResult.hasAnsibleResources && (
+                <Alert className="bg-yellow-50 mb-4 border-yellow-200">
+                  <AlertDescription className="text-yellow-700">
+                    The directory exists but no Ansible resources were detected.
+                  </AlertDescription>
+                </Alert>
+              )}
+
               <div className="space-y-2">
                 <Label htmlFor="custom-playbooks-dir">Custom Playbooks Directory</Label>
                 <Input 
@@ -291,6 +465,8 @@ export default function Settings() {
                   id="server-info" 
                   placeholder="Server connection details for remote Ansible deployment (optional)"
                   className="min-h-[100px]"
+                  value={customSettings.serverConnectionInfo}
+                  onChange={(e) => setCustomSettings({...customSettings, serverConnectionInfo: e.target.value})}
                 />
                 <p className="text-xs text-muted-foreground mt-1">
                   Optional: Add server connection details if you're connecting to a remote Kubernetes deployment
@@ -309,7 +485,7 @@ export default function Settings() {
                     Saving...
                   </>
                 ) : (
-                  "Save Custom Paths"
+                  "Apply Custom Paths"
                 )}
               </Button>
             </CardFooter>
