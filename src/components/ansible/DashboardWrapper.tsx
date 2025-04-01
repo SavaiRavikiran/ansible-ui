@@ -118,10 +118,12 @@ const DashboardWrapper: React.FC = () => {
     const checkDefaultPaths = async () => {
       setIsCheckingResources(true);
       try {
+        // Use sensible defaults for browser environment
+        // We can't directly access environment variables in browser
         const defaultPaths = [
           '/etc/ansible',
-          `${window.HOME}/ansible`,
-          window.ANSIBLE_CONFIG && window.ANSIBLE_CONFIG.split('/ansible.cfg')[0]
+          '/home/user/ansible', // Generic user home path as fallback
+          '/usr/local/etc/ansible'
         ].filter(Boolean);
         
         for (const path of defaultPaths) {
