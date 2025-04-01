@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import Dashboard from "@/pages/Dashboard";
 import NoAnsibleResources from "./NoAnsibleResources";
@@ -55,13 +54,14 @@ const DashboardWrapper: React.FC = () => {
     queryKey: ['ansible-status'],
     queryFn: checkAnsibleStatus,
     retry: 1,
-    onSettled: (data, error) => {
-      if (error) {
-        console.error('Error checking Ansible status:', error);
-        toast.error('Could not verify Ansible installation');
-      } else if (data && !data.available) {
+    onSuccess: (data) => {
+      if (data && !data.available) {
         toast.warning('Ansible is not installed or not accessible');
       }
+    },
+    onError: (error) => {
+      console.error('Error checking Ansible status:', error);
+      toast.error('Could not verify Ansible installation');
     }
   });
 
@@ -101,12 +101,10 @@ const DashboardWrapper: React.FC = () => {
     }
   });
 
-  // Initial check for Ansible resources in default paths
   useEffect(() => {
     const checkDefaultPaths = async () => {
       setIsCheckingResources(true);
       try {
-        // Check default ansible paths
         const defaultPaths = [
           '/etc/ansible',
           `${process.env.HOME}/ansible`,
@@ -127,7 +125,6 @@ const DashboardWrapper: React.FC = () => {
           }
         }
         
-        // If we get here, no resources were found in default paths
         setHasResources(false);
       } catch (error) {
         console.error('Error checking default paths:', error);
@@ -148,7 +145,6 @@ const DashboardWrapper: React.FC = () => {
     return createSampleMutation.mutateAsync(path);
   };
 
-  // Loading state
   if (isCheckingResources || isLoadingStatus) {
     return (
       <div className="flex flex-col items-center justify-center h-[calc(100vh-100px)]">
@@ -158,7 +154,6 @@ const DashboardWrapper: React.FC = () => {
     );
   }
 
-  // No Ansible resources found
   if (hasResources === false) {
     return (
       <NoAnsibleResources 
@@ -168,7 +163,6 @@ const DashboardWrapper: React.FC = () => {
     );
   }
 
-  // Ansible resources found, show the dashboard
   return <Dashboard />;
 };
 
