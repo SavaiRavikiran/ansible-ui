@@ -1,3 +1,4 @@
+
 import express from 'express';
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -58,6 +59,16 @@ const formatFileSize = (bytes) => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
+// Check if path exists
+const pathExists = async (path) => {
+  try {
+    await fs.access(path);
+    return true;
+  } catch (error) {
+    return false;
+  }
+};
+
 // Check if Ansible is installed and working properly
 const checkAnsibleAvailability = async () => {
   try {
@@ -105,20 +116,26 @@ app.post('/api/search-ansible-resources', async (req, res) => {
     
     // Check if the path exists
     try {
-      await fs.access(customPath);
+      const exists = await pathExists(customPath);
+      if (!exists) {
+        return res.status(404).json({ 
+          message: `Directory does not exist: ${customPath}`,
+          exists: false 
+        });
+      }
     } catch (error) {
       return res.status(404).json({ 
-        message: `Directory does not exist: ${customPath}`,
+        message: `Error checking directory: ${customPath}, ${error.message}`,
         exists: false 
       });
     }
     
     // Check for common Ansible structures
-    const hasPlaybooks = fs.existsSync(path.join(customPath, 'playbooks')) || 
-                         fs.existsSync(path.join(customPath, 'site.yml'));
-    const hasInventories = fs.existsSync(path.join(customPath, 'inventories')) || 
-                           fs.existsSync(path.join(customPath, 'hosts'));
-    const hasRoles = fs.existsSync(path.join(customPath, 'roles'));
+    const hasPlaybooks = await pathExists(path.join(customPath, 'playbooks')) || 
+                         await pathExists(path.join(customPath, 'site.yml'));
+    const hasInventories = await pathExists(path.join(customPath, 'inventories')) || 
+                           await pathExists(path.join(customPath, 'hosts'));
+    const hasRoles = await pathExists(path.join(customPath, 'roles'));
     
     res.json({
       exists: true,
@@ -329,14 +346,8 @@ app.get('/api/files', async (req, res) => {
     const directoryPath = req.query.path || '/etc/ansible';
     const searchQuery = req.query.search || '';
     
-    if (!fs.existsSync) {
-      // Use fs.promises.access to check if directory exists
-      try {
-        await fs.access(directoryPath);
-      } catch (error) {
-        return res.status(404).json({ message: `Directory does not exist: ${directoryPath}` });
-      }
-    } else if (!fs.existsSync(directoryPath)) {
+    const dirExists = await pathExists(directoryPath);
+    if (!dirExists) {
       return res.status(404).json({ message: `Directory does not exist: ${directoryPath}` });
     }
     
@@ -399,9 +410,8 @@ app.get('/api/files/read', async (req, res) => {
       return res.status(400).json({ message: 'File path is required' });
     }
     
-    try {
-      await fs.access(filePath);
-    } catch (error) {
+    const exists = await pathExists(filePath);
+    if (!exists) {
       return res.status(404).json({ message: `File does not exist: ${filePath}` });
     }
     
@@ -466,9 +476,8 @@ app.delete('/api/files/delete', async (req, res) => {
       return res.status(400).json({ message: 'Item path is required' });
     }
     
-    try {
-      await fs.access(itemPath);
-    } catch (error) {
+    const exists = await pathExists(itemPath);
+    if (!exists) {
       return res.status(404).json({ message: `Item does not exist: ${itemPath}` });
     }
     
@@ -534,8 +543,9 @@ async function startServer() {
   console.log(`Starting server in ${process.env.NODE_ENV || 'development'} mode...`);
   
   // Check if we're in a Docker container
-  const isDocker = fs.existsSync('/.dockerenv') || fs.existsSync('/proc/1/cgroup') && 
-                   (await fs.readFile('/proc/1/cgroup', 'utf8')).includes('docker');
+  const isDocker = await pathExists('/.dockerenv') || 
+                   (await pathExists('/proc/1/cgroup') && 
+                   (await fs.readFile('/proc/1/cgroup', 'utf8')).includes('docker'));
   
   console.log(`Running in Docker: ${isDocker ? 'Yes' : 'No'}`);
   console.log(`Ansible directories:`);
@@ -571,14 +581,14 @@ async function startServer() {
     const staticPath = path.join(__dirname, 'dist');
     console.log(`Serving static files from: ${staticPath}`);
     app.use(express.static(staticPath));
+    
+    // For SPA, serve index.html for any route not matched by API routes or static files
+    app.get('*', (req, res) => {
+      const indexPath = path.join(__dirname, 'dist', 'index.html');
+      console.log(`Serving index.html from: ${indexPath}`);
+      res.sendFile(indexPath);
+    });
   }
-
-  // For SPA, serve index.html for any route not matched by API routes or static files
-  app.get('*', (req, res) => {
-    const indexPath = path.join(__dirname, 'dist', 'index.html');
-    console.log(`Serving index.html from: ${indexPath}`);
-    res.sendFile(indexPath);
-  });
 
   // Start the server
   app.listen(PORT, () => {

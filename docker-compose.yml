@@ -1,5 +1,5 @@
 
-version: '3'
+version: '3.8'
 services:
   ansible-ui:
     build: .
@@ -27,5 +27,8 @@ services:
 
 volumes:
   ansible-playbooks:
+    driver: local
   ansible-inventories:
+    driver: local
   ansible-roles:
+    driver: local
