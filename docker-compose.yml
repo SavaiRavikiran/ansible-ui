@@ -8,15 +8,24 @@ services:
     volumes:
       - ./lib:/app/lib
       - ./ansible.db:/app/ansible.db
-      - ${ANSIBLE_PLAYBOOKS_DIR:-/etc/ansible/playbooks}:${ANSIBLE_PLAYBOOKS_DIR:-/etc/ansible/playbooks}
-      - ${ANSIBLE_INVENTORIES_DIR:-/etc/ansible/inventories}:${ANSIBLE_INVENTORIES_DIR:-/etc/ansible/inventories}
-      - ${ANSIBLE_ROLES_DIR:-/etc/ansible/roles}:${ANSIBLE_ROLES_DIR:-/etc/ansible/roles}
+      - ansible-playbooks:/etc/ansible/playbooks
+      - ansible-inventories:/etc/ansible/inventories
+      - ansible-roles:/etc/ansible/roles
     environment:
       - PORT=3001
       - NODE_ENV=production
-      - ANSIBLE_PLAYBOOKS_DIR=${ANSIBLE_PLAYBOOKS_DIR:-/etc/ansible/playbooks}
-      - ANSIBLE_INVENTORIES_DIR=${ANSIBLE_INVENTORIES_DIR:-/etc/ansible/inventories}
-      - ANSIBLE_ROLES_DIR=${ANSIBLE_ROLES_DIR:-/etc/ansible/roles}
+      - ANSIBLE_PLAYBOOKS_DIR=/etc/ansible/playbooks
+      - ANSIBLE_INVENTORIES_DIR=/etc/ansible/inventories
+      - ANSIBLE_ROLES_DIR=/etc/ansible/roles
     restart: unless-stopped
-    # Make sure we can find ansible on the host machine if installed
-    network_mode: "host"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  ansible-playbooks:
+  ansible-inventories:
+  ansible-roles:

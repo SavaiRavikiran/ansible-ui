@@ -1,0 +1,42 @@
+
+# Default values for ansible-ui
+replicaCount: 1
+
+image:
+  repository: ansible-ui
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+service:
+  type: ClusterIP
+  port: 3001
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+persistence:
+  enabled: true
+  playbooks:
+    storageClass: ""
+    accessMode: ReadWriteOnce
+    size: 1Gi
+  inventories:
+    storageClass: ""
+    accessMode: ReadWriteOnce
+    size: 1Gi
+  roles:
+    storageClass: ""
+    accessMode: ReadWriteOnce
+    size: 1Gi
+
+env:
+  PORT: 3001
+  NODE_ENV: production
+  ANSIBLE_PLAYBOOKS_DIR: /etc/ansible/playbooks
+  ANSIBLE_INVENTORIES_DIR: /etc/ansible/inventories
+  ANSIBLE_ROLES_DIR: /etc/ansible/roles

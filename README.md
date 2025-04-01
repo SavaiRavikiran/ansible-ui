@@ -3,256 +3,180 @@
 
 A modern web interface for managing Ansible and other popular DevOps tools.
 
-## Project info
+## Project Overview
 
-**URL**: https://lovable.dev/projects/d11c8467-6c82-4de0-ad4c-84ab54b87fee
+Ansible UI is a modern web interface for managing Ansible automation. It provides a clean, intuitive interface for:
+- Running Ansible playbooks, as well as Bash and PowerShell scripts
+- Receiving notifications about failed tasks
+- Viewing real-time execution logs
+- Controlling access to your deployment system
+- Importing and exporting configurations between UI and local filesystem
 
-## Overview
+## Quick Deployment Options
 
-Ansible UI is a modern web interface for managing popular DevOps tools.
-The UI allows you to:
-- Easily run Ansible playbooks, as well as Bash and PowerShell scripts
-- Receive notifications about failed tasks
-- View real-time execution logs
-- Control access to your deployment system
-- Import and export configurations between UI and local filesystem
+### 1. Docker (Recommended)
 
-## Key Concepts
-
-- **Projects**: A collection of related resources, configurations, and tasks
-- **Task Templates**: Reusable definitions of tasks that can be executed on demand or scheduled
-- **Task**: A specific instance of a job or operation executed by UI
-- **Schedules**: Allow you to automate task execution at specified times or intervals
-- **Inventory**: A collection of target hosts (servers, virtual machines, containers, etc.) on which tasks will be executed
-- **Variable Group**: A configuration context that holds sensitive information such as environment variables and secrets used by tasks during execution
-
-## Testing Guide
-
-### Prerequisites
-1. Make sure you have Node.js installed on your system
-2. Ensure you have Ansible installed if you want to test with actual Ansible data
-3. Git clone of the repository on your local machine
-
-### Step 1: Local Development Testing
+The fastest way to get started is using Docker:
 
 ```bash
 # Clone the repository
-git clone <your-repository-url>
-cd <repository-directory>
+git clone <repository-url>
+cd ansible-ui
+
+# Build and run with Docker Compose
+docker-compose up --build
+```
+
+This will make the application available at `http://localhost:3001`.
+
+### 2. Direct Run Script
+
+For direct installation on your host system:
+
+```bash
+# Download the runner script
+wget -O run-ansible-ui.sh https://raw.githubusercontent.com/your-org/ansible-ui/main/run-ansible-ui.sh
+
+# Make it executable
+chmod +x run-ansible-ui.sh
+
+# Run the script
+./run-ansible-ui.sh
+```
+
+The script will handle downloading the application, installing dependencies, building the app, and running it.
+
+### 3. Kubernetes (with Helm)
+
+For deployment on Kubernetes clusters:
+
+```bash
+# Clone the repository to get the Helm chart
+git clone <repository-url>
+cd ansible-ui
+
+# Install the Helm chart
+helm install ansible-ui ./helm/ansible-ui
+
+# To expose the service (if needed)
+kubectl port-forward svc/ansible-ui 3001:3001
+```
+
+Alternatively, you can customize the deployment by modifying values:
+
+```bash
+# Create a custom values file
+cat > my-values.yaml << EOF
+service:
+  type: LoadBalancer
+replicaCount: 2
+persistence:
+  enabled: true
+  playbooks:
+    size: 5Gi
+EOF
+
+# Install with custom values
+helm install ansible-ui ./helm/ansible-ui -f my-values.yaml
+```
+
+## Environment Configuration
+
+The following environment variables can be configured:
+
+| Variable | Description | Default Value |
+|----------|-------------|---------------|
+| `ANSIBLE_PLAYBOOKS_DIR` | Directory for Ansible playbooks | /etc/ansible/playbooks |
+| `ANSIBLE_INVENTORIES_DIR` | Directory for Ansible inventories | /etc/ansible/inventories |
+| `ANSIBLE_ROLES_DIR` | Directory for Ansible roles | /etc/ansible/roles |
+| `PORT` | Server port | 3001 |
+| `NODE_ENV` | Node environment | production |
+
+## Requirements
+
+- Node.js 18 or higher
+- Ansible 2.9 or higher (for playbook execution)
+- Docker (for containerized deployment)
+- Kubernetes & Helm (for Kubernetes deployment)
+
+## Auto-Detection of Ansible Resources
+
+On startup, Ansible UI automatically detects:
+1. Ansible installation on the host system
+2. Existing playbooks, inventories, and roles in standard locations
+3. If no resources are found, offers to create sample resources
+
+## Components and Tools
+
+Ansible UI includes several components to help manage Ansible automation:
+
+- **Dashboard**: Overview of system status, recent runs, and resource counts
+- **Playbooks**: Manage and run Ansible playbooks
+- **Inventories**: Manage hosts and host groups
+- **Roles**: Manage Ansible roles and their components
+- **Variables**: Manage host and group variables
+- **Scheduler**: Schedule playbook runs on a recurring basis
+- **Settings**: Configure paths, credentials, and other options
+
+## Technologies Used
+
+This project is built with:
+
+- **Frontend**:
+  - React
+  - TypeScript
+  - Tailwind CSS
+  - shadcn/ui components
+  - Vite
+
+- **Backend**:
+  - Express.js
+  - SQLite (for data storage)
+  - Ansible (for automation execution)
+
+- **Deployment**:
+  - Docker
+  - Kubernetes (with Helm)
+  - Direct installation script
+
+## Development Guide
+
+To set up the application for development:
+
+```bash
+# Clone the repository
+git clone <repository-url>
+cd ansible-ui
 
 # Install dependencies
 npm install
 
-# Start the development server
+# Start development server with hot reload
 npm run dev
-
-# Or build and start the production server
-npm run build
-node server.js
 ```
 
-The application should now be accessible at http://localhost:3001
-
-### Step 2: Testing with Docker
+For testing with Docker during development:
 
 ```bash
-# Build and run using Docker
-docker build -t ansible-ui .
-docker run -p 3001:3001 ansible-ui
-
-# Or use Docker Compose
-docker-compose up --build
-
-# Or use the test-locally.sh script
+# Use the test-locally script
 chmod +x test-locally.sh
 ./test-locally.sh
 ```
 
-### Step 3: Testing Individual Features
+## Troubleshooting
 
-1. **Dashboard Testing**
-   - Navigate to http://localhost:3001
-   - Verify system stats, recent runs, and other dashboard widgets load
-   - Check that charts and metrics display correctly
-   - Review History, Activity, and Building sections
-   - Test NEW RUNNER functionality
-   - Verify the log exporting feature
+### Common Issues
 
-2. **Playbooks Management**
-   - Go to the Playbooks section
-   - Try to create a new playbook
-   - Verify you can view existing playbooks
-   - Test executing a playbook against an inventory
-   - Ensure real-time logs appear when running a playbook
-   - Verify the "Rerun" option appears for failed playbooks
+1. **Ansible not detected**: Ensure Ansible is installed and in PATH
+2. **Permission issues**: Ensure appropriate permissions for Ansible directories
+3. **Connection refused**: Check if the application port is open and not in use
+4. **Docker build fails**: Make sure Docker has enough resources allocated
 
-3. **Task Templates**
-   - Navigate to the Task Templates section
-   - Test creating new templates using the All, Build, Deploy options
-   - Edit existing templates
-   - Run a template and verify it executes correctly
+### Logs
 
-4. **Inventories and Hosts**
-   - Navigate to Inventories and Hosts sections
-   - Test creating a new inventory
-   - Add hosts to an inventory
-   - Verify host data displays correctly in both table and grid views
+- Server logs: `server-logs.txt`
+- Browser console: Check Developer Tools in your browser
 
-5. **Custom Paths Configuration**
-   - Go to Settings
-   - Set custom paths for playbooks, inventories, and roles
-   - Save configuration and check if paths are properly stored
-   - Restart the application and verify if it uses the custom paths
+## License
 
-6. **Import/Export functionality**
-   - Test importing data from your local Ansible directories
-   - Try exporting UI data to local filesystem
-   - Verify the data integrity after the import/export operations
-
-### Step 4: Testing Kubernetes Deployment
-
-```bash
-# Assuming you have a Kubernetes cluster and Helm installed
-
-# Create a Helm chart if you don't have one
-helm create ansible-ui
-
-# Package the chart
-helm package ./ansible-ui
-
-# Install the chart to your Kubernetes cluster
-helm install ansible-ui ./ansible-ui-0.1.0.tgz --set service.type=LoadBalancer
-
-# Get the external IP
-kubectl get svc ansible-ui
-
-# Access the application using the external IP
-# http://<EXTERNAL-IP>:3001
-```
-
-### Step 5: Testing API Endpoints
-
-Use tools like Postman or curl to test the API endpoints:
-
-```bash
-# Test the health endpoint
-curl http://localhost:3001/api/health
-
-# Get dashboard stats
-curl http://localhost:3001/api/dashboard
-
-# Get playbooks
-curl http://localhost:3001/api/playbooks
-
-# Get inventories
-curl http://localhost:3001/api/inventories
-
-# Get hosts
-curl http://localhost:3001/api/hosts
-```
-
-### Step 6: Testing Browser Compatibility
-
-Test the application on different browsers:
-- Chrome
-- Firefox
-- Safari
-- Edge
-
-### Step 7: Testing Responsive Design
-
-Test the application on:
-- Desktop (various resolutions)
-- Tablet
-- Mobile devices
-
-### Troubleshooting Common Issues
-
-1. If the server fails to start, check server-logs.txt for error details
-2. Ensure the database file has proper permissions
-3. Verify that the Ansible directories exist and are accessible
-4. Check that SQLite is properly installed for database operations
-5. Look at the console logs in the browser for frontend issues
-6. Ensure the server is running when you try to access the UI
-
-## How can I edit this code?
-
-There are several ways of editing your application.
-
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/d11c8467-6c82-4de0-ad4c-84ab54b87fee) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
-
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-- Express.js (Backend server)
-- SQLite (Database)
-- Docker (Containerization)
-- Kubernetes (Deployment)
-
-## How can I deploy this project?
-
-### Web Deployment
-Simply open [Lovable](https://lovable.dev/projects/d11c8467-6c82-4de0-ad4c-84ab54b87fee) and click on Share -> Publish.
-
-### Kubernetes Deployment
-The project includes a Dockerfile and configuration for Kubernetes deployment. Use Helm charts for simplified deployment to Kubernetes clusters.
-
-## Environment Variables
-
-The following environment variables can be configured:
-
-- `ANSIBLE_PLAYBOOKS_DIR`: Directory for Ansible playbooks (default: /etc/ansible/playbooks)
-- `ANSIBLE_INVENTORIES_DIR`: Directory for Ansible inventories (default: /etc/ansible/inventories)
-- `ANSIBLE_ROLES_DIR`: Directory for Ansible roles (default: /etc/ansible/roles)
-- `PORT`: Server port (default: 3001)
-- `SERVER_MODE`: Server mode (default: kubernetes)
-
-## I want to use a custom domain - is that possible?
-
-We don't support custom domains (yet). If you want to deploy your project under your own domain then we recommend using Netlify. Visit our docs for more details: [Custom domains](https://docs.lovable.dev/tips-tricks/custom-domain/)
+[MIT License](LICENSE)

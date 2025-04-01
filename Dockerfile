@@ -5,7 +5,13 @@ WORKDIR /app
 
 # Install system dependencies including Ansible
 RUN apk add --no-cache python3 py3-pip openssh-client bash curl && \
-    pip3 install --no-cache-dir ansible
+    # Create and use a virtual environment for Ansible installation
+    python3 -m venv /opt/ansible-venv && \
+    . /opt/ansible-venv/bin/activate && \
+    pip3 install --no-cache-dir ansible && \
+    # Make the ansible executables available in PATH
+    ln -s /opt/ansible-venv/bin/ansible /usr/local/bin/ansible && \
+    ln -s /opt/ansible-venv/bin/ansible-playbook /usr/local/bin/ansible-playbook
 
 # Create ansible directories
 RUN mkdir -p /etc/ansible/playbooks /etc/ansible/inventories /etc/ansible/roles
@@ -38,7 +44,7 @@ ENV NODE_ENV=production
 VOLUME ["/etc/ansible/playbooks", "/etc/ansible/inventories", "/etc/ansible/roles"]
 
 # Add a healthcheck
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 CMD curl -f http://localhost:${PORT}/api/health || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT}/api/health || exit 1
 
 # Start the server
 CMD ["node", "server.js"]

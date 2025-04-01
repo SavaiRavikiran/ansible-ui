@@ -1,0 +1,44 @@
+
+{{- if .Values.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-playbooks
+spec:
+  accessModes:
+    - {{ .Values.persistence.playbooks.accessMode | quote }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.playbooks.size | quote }}
+  {{- if .Values.persistence.playbooks.storageClass }}
+  storageClassName: {{ .Values.persistence.playbooks.storageClass | quote }}
+  {{- end }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-inventories
+spec:
+  accessModes:
+    - {{ .Values.persistence.inventories.accessMode | quote }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.inventories.size | quote }}
+  {{- if .Values.persistence.inventories.storageClass }}
+  storageClassName: {{ .Values.persistence.inventories.storageClass | quote }}
+  {{- end }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-roles
+spec:
+  accessModes:
+    - {{ .Values.persistence.roles.accessMode | quote }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.roles.size | quote }}
+  {{- if .Values.persistence.roles.storageClass }}
+  storageClassName: {{ .Values.persistence.roles.storageClass | quote }}
+  {{- end }}
+{{- end }}

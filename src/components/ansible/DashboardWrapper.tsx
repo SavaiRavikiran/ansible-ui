@@ -51,6 +51,7 @@ const DashboardWrapper: React.FC = () => {
   const [hasResources, setHasResources] = useState<boolean | null>(null);
   const [isCheckingResources, setIsCheckingResources] = useState(true);
 
+  // Use the useQuery hook without the problematic callbacks
   const { data: ansibleStatus, isLoading: isLoadingStatus } = useQuery({
     queryKey: ['ansible-status'],
     queryFn: checkAnsibleStatus,
@@ -58,14 +59,14 @@ const DashboardWrapper: React.FC = () => {
     gcTime: 0
   });
 
-  // Monitor the query result and show appropriate toasts
+  // Handle success scenario using useEffect
   useEffect(() => {
     if (ansibleStatus && !ansibleStatus.available) {
       toast.warning('Ansible is not installed or not accessible');
     }
   }, [ansibleStatus]);
 
-  // Handle errors for the query
+  // Handle errors for the query using useEffect
   useEffect(() => {
     const handleQueryError = () => {
       console.error('Error checking Ansible status');
