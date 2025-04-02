@@ -126,7 +126,11 @@ export function DeploymentConfigurator() {
         clusterUrl: values.clusterUrl,
         customDomain: values.customDomain,
         sslEnabled: values.sslEnabled,
-        resources: values.resources,
+        resources: {
+          cpu: values.resources.cpu || "0.5", // Ensure required properties have default values
+          memory: values.resources.memory || "512Mi",
+          storage: values.resources.storage || "1Gi"
+        },
         environmentVariables: values.environmentVariables,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -161,7 +165,11 @@ export function DeploymentConfigurator() {
         clusterUrl: values.clusterUrl,
         customDomain: values.customDomain,
         sslEnabled: values.sslEnabled,
-        resources: values.resources,
+        resources: {
+          cpu: values.resources.cpu || "0.5", // Ensure required properties have default values
+          memory: values.resources.memory || "512Mi",
+          storage: values.resources.storage || "1Gi"
+        },
         environmentVariables: values.environmentVariables,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
