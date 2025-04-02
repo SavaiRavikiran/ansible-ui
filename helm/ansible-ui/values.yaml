@@ -52,11 +52,15 @@ env:
   ANSIBLE_INVENTORIES_DIR: /etc/ansible/inventories
   ANSIBLE_ROLES_DIR: /etc/ansible/roles
   # Add log level for debugging
-  LOG_LEVEL: info
+  LOG_LEVEL: debug  # Changed from info to debug
   # Enable verbose mode for ansible playbooks
   ANSIBLE_VERBOSE: true
-  # Allow becoming root when needed
+  # Always enable become for proper privilege escalation
   ANSIBLE_BECOME_ENABLED: true
+  # Set the become method (sudo, su, etc)
+  ANSIBLE_BECOME_METHOD: sudo
+  # Add timeout for playbook execution (60 minutes)
+  ANSIBLE_EXECUTION_TIMEOUT: 3600
 
 # License configuration
 license:
@@ -122,7 +126,7 @@ playbookExecution:
   # Use real-time execution for playbooks (recommended)
   realTimeExecution: true
   # Set verbosity level for ansible playbook (0-4)
-  verbosity: 1
+  verbosity: 2  # Increased from 1 to 2 for more detailed logs
 
 # Configure external services integration
 externalServices:

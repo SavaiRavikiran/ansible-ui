@@ -403,6 +403,35 @@ app.post('/api/hosts', async (req, res) => {
   }
 });
 
+// Global object to store execution logs
+global.ansibleExecutions = {};
+
+app.get('/api/playbook-logs/:executionId', (req, res) => {
+  const { executionId } = req.params;
+  
+  console.log(`API call to get logs for execution: ${executionId}`);
+  
+  if (!global.ansibleExecutions || !global.ansibleExecutions[executionId]) {
+    console.warn(`Execution ID not found: ${executionId}`);
+    return res.status(404).json({ 
+      message: `Execution ID not found: ${executionId}`,
+      logs: [],
+      status: 'unknown'
+    });
+  }
+  
+  const executionData = global.ansibleExecutions[executionId];
+  console.log(`Returning ${executionData.logs.length} log entries for ${executionId}, status: ${executionData.status}`);
+  
+  res.json({
+    logs: executionData.logs,
+    status: executionData.status,
+    startTime: executionData.startTime,
+    endTime: executionData.endTime || null,
+    exitCode: executionData.exitCode
+  });
+});
+
 app.post('/api/execute-playbook', async (req, res) => {
   try {
     const { playbookId, inventoryId } = req.body;
@@ -420,13 +449,11 @@ app.post('/api/execute-playbook', async (req, res) => {
       throw new Error(`Inventory not found: ${inventoryPath}`);
     }
     
-    const executionId = Math.random().toString(36).substring(2, 15);
-    
-    runAnsiblePlaybook(playbookPath, inventoryPath, executionId);
+    const result = await executePlaybook(playbookId, inventoryId);
     
     res.json({
-      id: executionId,
-      status: 'running',
+      id: result.id,
+      status: result.status,
     });
   } catch (error) {
     console.error('Error executing playbook:', error);
@@ -435,31 +462,6 @@ app.post('/api/execute-playbook', async (req, res) => {
       error: error.toString() 
     });
   }
-});
-
-app.get('/api/playbook-logs/:executionId', (req, res) => {
-  const { executionId } = req.params;
-  
-  console.log(`API call to get logs for execution: ${executionId}`);
-  
-  if (!executionLogs.has(executionId)) {
-    console.warn(`Execution ID not found: ${executionId}`);
-    return res.status(404).json({ 
-      message: `Execution ID not found: ${executionId}`,
-      logs: [],
-      status: 'unknown'
-    });
-  }
-  
-  const logData = executionLogs.get(executionId);
-  console.log(`Returning ${logData.logs.length} log entries for ${executionId}, status: ${logData.status}`);
-  
-  res.json({
-    logs: logData.logs,
-    status: logData.status,
-    startTime: logData.startTime,
-    endTime: logData.endTime || null
-  });
 });
 
 app.get('/api/files', async (req, res) => {

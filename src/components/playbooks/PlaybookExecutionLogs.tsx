@@ -27,7 +27,8 @@ export function PlaybookExecutionLogs({ playbook, inventoryId, onClose }: Playbo
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
   const [connectionError, setConnectionError] = useState<boolean>(false);
   const [pollingRetryCount, setPollingRetryCount] = useState<number>(0);
-  const MAX_RETRY_ATTEMPTS = 5;
+  const [hasAnsibleError, setHasAnsibleError] = useState<boolean>(false);
+  const MAX_RETRY_ATTEMPTS = 10; // Increased from 5 to 10
 
   // Execute the playbook and get real logs
   useEffect(() => {
@@ -38,6 +39,7 @@ export function PlaybookExecutionLogs({ playbook, inventoryId, onClose }: Playbo
     setExecutionEndTime(null);
     setConnectionError(false);
     setPollingRetryCount(0);
+    setHasAnsibleError(false);
     
     const runPlaybook = async () => {
       try {
@@ -55,11 +57,13 @@ export function PlaybookExecutionLogs({ playbook, inventoryId, onClose }: Playbo
         setLogs(prev => [...prev, 
           "Error: Failed to execute playbook. Check server logs for details.",
           "Make sure the ansible-playbook command is available on your system.",
-          "You can try running the playbook from the command line to verify if it works."
+          "You can try running the playbook from the command line to verify if it works.",
+          "Command to try manually: ansible-playbook --become -i <inventory-path> <playbook-path>"
         ]);
         setStatus('failed');
         setIsRunning(false);
         setExecutionEndTime(new Date());
+        setHasAnsibleError(true);
       }
     };
     
@@ -82,6 +86,7 @@ export function PlaybookExecutionLogs({ playbook, inventoryId, onClose }: Playbo
     const interval = setInterval(async () => {
       try {
         const response = await fetch(`/api/playbook-logs/${execId}`);
+        
         if (!response.ok) {
           throw new Error(`Failed to fetch logs: ${response.statusText}`);
         }
@@ -119,6 +124,25 @@ export function PlaybookExecutionLogs({ playbook, inventoryId, onClose }: Playbo
               "You may need to check the server logs for more details."
             ]);
           }
+          
+          // Check if there are any error messages in the logs
+          const errorIndicators = ['fatal', 'failed=', 'ERROR!', 'error:', 'permission denied'];
+          const hasErrors = data.logs.some(log => 
+            errorIndicators.some(indicator => 
+              log.toLowerCase().includes(indicator) && 
+              !log.includes('failed=0')
+            )
+          );
+          
+          if (hasErrors || data.status === 'failed') {
+            setHasAnsibleError(true);
+            // Add helpful information for debugging
+            setLogs(prev => [...prev, 
+              "Note: This playbook may require elevated permissions.",
+              "Try running it manually with: ansible-playbook --become -i <inventory-path> <playbook-path>",
+              "Make sure the paths in your playbook are accessible to the user running Ansible UI."
+            ]);
+          }
         }
       } catch (error) {
         console.error("Error polling for logs:", error);
@@ -131,16 +155,18 @@ export function PlaybookExecutionLogs({ playbook, inventoryId, onClose }: Playbo
         if (pollingRetryCount >= MAX_RETRY_ATTEMPTS) {
           setLogs(prev => [...prev, 
             "Error: Connection lost while retrieving logs. Please check server status.",
-            "The playbook may still be running in the background."
+            "The playbook may still be running in the background.",
+            "If this is a permission issue, try running the playbook with elevated permissions."
           ]);
           setStatus('failed');
           setIsRunning(false);
           setExecutionEndTime(new Date());
           clearInterval(interval);
           setPollingInterval(null);
+          setHasAnsibleError(true);
         }
       }
-    }, 2000); // Poll every 2 seconds
+    }, 1000); // Poll every 1 second (reduced from 2 seconds)
     
     setPollingInterval(interval);
   };
@@ -218,7 +244,7 @@ ${logs.join('\n')}
 
   // Format log line with appropriate styling
   const formatLogLine = (line: string) => {
-    if (line.includes("FAILED") || line.includes("fatal") || line.includes("failed=") && !line.includes("failed=0")) {
+    if (line.includes("FAILED") || line.includes("fatal") || line.includes("failed=") && !line.includes("failed=0") || line.includes("ERROR!")) {
       return <span className="text-red-400">{line}</span>;
     } else if (line.includes("ok:")) {
       return <span className="text-green-400">{line}</span>;
@@ -226,8 +252,10 @@ ${logs.join('\n')}
       return <span className="text-yellow-400">{line}</span>;
     } else if (line.includes("PLAY") || line.includes("TASK") || line.includes("RECAP")) {
       return <span className="text-blue-400 font-bold">{line}</span>;
-    } else if (line.includes("Error:")) {
+    } else if (line.includes("Error:") || line.includes("error:")) {
       return <span className="text-red-400 font-bold">{line}</span>;
+    } else if (line.includes("Note:")) {
+      return <span className="text-amber-400 font-bold">{line}</span>;
     } else {
       return line;
     }
@@ -305,19 +333,29 @@ ${logs.join('\n')}
           )}
         </ScrollArea>
         
-        <div className="mt-4 flex justify-end gap-2">
-          {connectionError && isRunning && (
-            <div className="text-amber-500 flex items-center">
-              <AlertCircle className="h-4 w-4 mr-1" />
-              Reconnecting... ({pollingRetryCount}/{MAX_RETRY_ATTEMPTS})
-            </div>
-          )}
-          {(status === 'failed' || !isRunning) && (
-            <Button onClick={handleRerun} className="gap-2">
-              <RotateCcw className="h-4 w-4" />
-              Rerun Playbook
-            </Button>
-          )}
+        <div className="mt-4 flex justify-between">
+          <div>
+            {hasAnsibleError && (
+              <div className="text-amber-500 text-sm">
+                <Terminal className="h-4 w-4 inline-block mr-1" />
+                <span>This may be a permissions issue. Try running with <code className="bg-black/10 dark:bg-white/10 p-1 rounded">--become</code> flag.</span>
+              </div>
+            )}
+            {connectionError && isRunning && (
+              <div className="text-amber-500 flex items-center">
+                <AlertCircle className="h-4 w-4 mr-1" />
+                Reconnecting... ({pollingRetryCount}/{MAX_RETRY_ATTEMPTS})
+              </div>
+            )}
+          </div>
+          <div>
+            {(status === 'failed' || !isRunning) && (
+              <Button onClick={handleRerun} className="gap-2">
+                <RotateCcw className="h-4 w-4" />
+                Rerun Playbook
+              </Button>
+            )}
+          </div>
         </div>
       </motion.div>
     </AnimatePresence>
