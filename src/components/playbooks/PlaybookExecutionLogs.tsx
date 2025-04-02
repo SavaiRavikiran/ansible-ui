@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
-import { RefreshCw, RotateCcw, Download, XCircle, CheckCircle, AlertCircle } from "lucide-react";
+import { RefreshCw, RotateCcw, Download, XCircle, CheckCircle, AlertCircle, Terminal } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
@@ -25,6 +25,9 @@ export function PlaybookExecutionLogs({ playbook, inventoryId, onClose }: Playbo
   const [executionStartTime, setExecutionStartTime] = useState<Date>(new Date());
   const [executionEndTime, setExecutionEndTime] = useState<Date | null>(null);
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
+  const [connectionError, setConnectionError] = useState<boolean>(false);
+  const [pollingRetryCount, setPollingRetryCount] = useState<number>(0);
+  const MAX_RETRY_ATTEMPTS = 5;
 
   // Execute the playbook and get real logs
   useEffect(() => {
@@ -33,6 +36,8 @@ export function PlaybookExecutionLogs({ playbook, inventoryId, onClose }: Playbo
     // Record start time when execution begins
     setExecutionStartTime(new Date());
     setExecutionEndTime(null);
+    setConnectionError(false);
+    setPollingRetryCount(0);
     
     const runPlaybook = async () => {
       try {
@@ -40,13 +45,18 @@ export function PlaybookExecutionLogs({ playbook, inventoryId, onClose }: Playbo
         
         // Call the API to execute the playbook
         const result = await executePlaybook(playbook.id, inventoryId);
+        console.log("Playbook execution started with ID:", result.id);
         setExecutionId(result.id);
         
         // Start polling for logs
         pollForLogs(result.id);
       } catch (error) {
         console.error("Error executing playbook:", error);
-        setLogs(prev => [...prev, "Error: Failed to execute playbook. Check server logs for details."]);
+        setLogs(prev => [...prev, 
+          "Error: Failed to execute playbook. Check server logs for details.",
+          "Make sure the ansible-playbook command is available on your system.",
+          "You can try running the playbook from the command line to verify if it works."
+        ]);
         setStatus('failed');
         setIsRunning(false);
         setExecutionEndTime(new Date());
@@ -77,7 +87,20 @@ export function PlaybookExecutionLogs({ playbook, inventoryId, onClose }: Playbo
         }
         
         const data = await response.json();
-        setLogs(data.logs || []);
+        
+        // Reset connection error flag if we received a successful response
+        if (connectionError) {
+          setConnectionError(false);
+          setPollingRetryCount(0);
+        }
+        
+        // If we got an empty logs array but we already have logs, don't replace them
+        if (Array.isArray(data.logs) && data.logs.length > 0) {
+          setLogs(data.logs);
+        } else if (Array.isArray(data.logs) && logs.length === 1 && data.logs.length === 0) {
+          // Only add a waiting message if we just have the initial execution message
+          setLogs([`Executing playbook ${playbook.name} with inventory ID ${inventoryId}...`, "Waiting for logs from server..."]);
+        }
         
         // Check if the execution is complete
         if (data.status && data.status !== 'running') {
@@ -86,10 +109,36 @@ export function PlaybookExecutionLogs({ playbook, inventoryId, onClose }: Playbo
           setExecutionEndTime(new Date());
           clearInterval(interval);
           setPollingInterval(null);
+          
+          // If we have no meaningful logs but execution has completed, provide feedback
+          if (data.logs.length <= 2) {
+            console.warn("Execution completed but received minimal logs");
+            setLogs(prev => [...prev, 
+              "Playbook execution completed, but received minimal logs from server.",
+              "Status: " + data.status.toUpperCase(),
+              "You may need to check the server logs for more details."
+            ]);
+          }
         }
       } catch (error) {
         console.error("Error polling for logs:", error);
-        // Don't stop polling on error, just log it
+        
+        // Track connection errors and attempts
+        setConnectionError(true);
+        setPollingRetryCount(prev => prev + 1);
+        
+        // If we've hit the retry limit, stop polling and report an error
+        if (pollingRetryCount >= MAX_RETRY_ATTEMPTS) {
+          setLogs(prev => [...prev, 
+            "Error: Connection lost while retrieving logs. Please check server status.",
+            "The playbook may still be running in the background."
+          ]);
+          setStatus('failed');
+          setIsRunning(false);
+          setExecutionEndTime(new Date());
+          clearInterval(interval);
+          setPollingInterval(null);
+        }
       }
     }, 2000); // Poll every 2 seconds
     
@@ -169,14 +218,16 @@ ${logs.join('\n')}
 
   // Format log line with appropriate styling
   const formatLogLine = (line: string) => {
-    if (line.includes("FAILED") || line.includes("fatal")) {
+    if (line.includes("FAILED") || line.includes("fatal") || line.includes("failed=") && !line.includes("failed=0")) {
       return <span className="text-red-400">{line}</span>;
     } else if (line.includes("ok:")) {
       return <span className="text-green-400">{line}</span>;
-    } else if (line.includes("changed:")) {
+    } else if (line.includes("changed:") || line.includes("changed=") && !line.includes("changed=0")) {
       return <span className="text-yellow-400">{line}</span>;
     } else if (line.includes("PLAY") || line.includes("TASK") || line.includes("RECAP")) {
       return <span className="text-blue-400 font-bold">{line}</span>;
+    } else if (line.includes("Error:")) {
+      return <span className="text-red-400 font-bold">{line}</span>;
     } else {
       return line;
     }
@@ -255,6 +306,12 @@ ${logs.join('\n')}
         </ScrollArea>
         
         <div className="mt-4 flex justify-end gap-2">
+          {connectionError && isRunning && (
+            <div className="text-amber-500 flex items-center">
+              <AlertCircle className="h-4 w-4 mr-1" />
+              Reconnecting... ({pollingRetryCount}/{MAX_RETRY_ATTEMPTS})
+            </div>
+          )}
           {(status === 'failed' || !isRunning) && (
             <Button onClick={handleRerun} className="gap-2">
               <RotateCcw className="h-4 w-4" />

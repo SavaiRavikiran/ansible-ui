@@ -1,4 +1,3 @@
-
 import express from 'express';
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -20,25 +19,19 @@ import {
   addHostToInventory
 } from './lib/ansible-service.js';
 
-// Get __dirname equivalent in ESM
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Create Express app
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// In-memory store for playbook execution logs
 const executionLogs = new Map();
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 
-// Configure multer for file uploads
 const upload = multer({ storage: multer.memoryStorage() });
 
-// Utility function for executing commands
 const execCommand = (cmd) => {
   return new Promise((resolve, reject) => {
     exec(cmd, (error, stdout, stderr) => {
@@ -55,77 +48,104 @@ const execCommand = (cmd) => {
   });
 };
 
-// Utility function to execute Ansible playbook and capture real-time output
 const runAnsiblePlaybook = (playbookPath, inventoryPath, executionId) => {
-  // Initialize logs for this execution
+  console.log(`Starting execution ${executionId} of ${playbookPath} with inventory ${inventoryPath}`);
+  
   executionLogs.set(executionId, {
     logs: [`Starting execution of ${path.basename(playbookPath)} with inventory ${path.basename(inventoryPath)}`],
-    status: 'running'
+    status: 'running',
+    startTime: new Date().toISOString(),
   });
 
-  // Build inventory parameter
   let inventoryParam = inventoryPath;
   
-  // If inventory is a directory, look for hosts file
   if (fs.existsSync(inventoryPath) && fs.statSync(inventoryPath).isDirectory()) {
     const hostsFile = path.join(inventoryPath, 'hosts');
     if (fs.existsSync(hostsFile)) {
       inventoryParam = hostsFile;
+      console.log(`Using hosts file: ${hostsFile}`);
     } else {
-      // Try to find another inventory file
       const files = fs.readdirSync(inventoryPath);
       for (const file of files) {
         if (file === 'hosts.yml' || file === 'hosts.yaml' || file === 'inventory.yml' || file === 'inventory.yaml') {
           inventoryParam = path.join(inventoryPath, file);
+          console.log(`Using inventory file: ${inventoryParam}`);
           break;
         }
       }
     }
   }
 
-  // Create command with verbose output
-  const command = `ansible-playbook -i "${inventoryParam}" "${playbookPath}" -v`;
+  const verbosityFlag = process.env.ANSIBLE_VERBOSE === 'true' ? '-v' : '';
+  const becomeFlag = process.env.ANSIBLE_BECOME_ENABLED === 'true' ? '--become' : '';
+
+  const command = `ansible-playbook ${verbosityFlag} ${becomeFlag} -i "${inventoryParam}" "${playbookPath}"`;
   console.log(`Executing command: ${command}`);
   
-  // Execute the playbook and capture output in real-time
-  const process = exec(command);
-  
-  // Capture stdout
-  process.stdout.on('data', (data) => {
-    console.log(`Ansible stdout: ${data}`);
-    const logData = executionLogs.get(executionId);
-    logData.logs.push(...data.toString().split('\n').filter(line => line.trim()));
-    executionLogs.set(executionId, logData);
-  });
+  try {
+    const process = exec(command, { maxBuffer: 10 * 1024 * 1024 });
+    
+    process.stdout.on('data', (data) => {
+      console.log(`Ansible stdout (${executionId}): ${data.toString().trim()}`);
+      const logData = executionLogs.get(executionId);
+      if (logData) {
+        logData.logs.push(...data.toString().split('\n').filter(line => line.trim()));
+        executionLogs.set(executionId, logData);
+      }
+    });
 
-  // Capture stderr
-  process.stderr.on('data', (data) => {
-    console.error(`Ansible stderr: ${data}`);
-    const logData = executionLogs.get(executionId);
-    logData.logs.push(...data.toString().split('\n').filter(line => line.trim()));
-    executionLogs.set(executionId, logData);
-  });
+    process.stderr.on('data', (data) => {
+      console.error(`Ansible stderr (${executionId}): ${data.toString().trim()}`);
+      const logData = executionLogs.get(executionId);
+      if (logData) {
+        logData.logs.push(...data.toString().split('\n').filter(line => line.trim()));
+        executionLogs.set(executionId, logData);
+      }
+    });
 
-  // Handle process completion
-  process.on('close', (code) => {
-    console.log(`Ansible process exited with code ${code}`);
-    const logData = executionLogs.get(executionId);
-    logData.status = code === 0 ? 'success' : 'failed';
-    logData.logs.push(`Process completed with exit code ${code} (${logData.status})`);
-    executionLogs.set(executionId, logData);
-  });
+    process.on('close', (code) => {
+      console.log(`Ansible process (${executionId}) exited with code ${code}`);
+      const logData = executionLogs.get(executionId);
+      if (logData) {
+        logData.status = code === 0 ? 'success' : 'failed';
+        logData.logs.push(`Process completed with exit code ${code} (${logData.status})`);
+        logData.endTime = new Date().toISOString();
+        executionLogs.set(executionId, logData);
+      }
+    });
+    
+    process.on('error', (err) => {
+      console.error(`Error spawning ansible process (${executionId}):`, err.message);
+      const logData = executionLogs.get(executionId);
+      if (logData) {
+        logData.status = 'failed';
+        logData.logs.push(`Error executing ansible-playbook command: ${err.message}`);
+        logData.logs.push('Please ensure ansible-playbook is installed and accessible');
+        logData.endTime = new Date().toISOString();
+        executionLogs.set(executionId, logData);
+      }
+    });
 
-  return executionId;
+    return executionId;
+  } catch (error) {
+    console.error(`Failed to start ansible process (${executionId}):`, error);
+    const logData = executionLogs.get(executionId);
+    if (logData) {
+      logData.status = 'failed';
+      logData.logs.push(`Failed to start ansible process: ${error.message}`);
+      logData.endTime = new Date().toISOString();
+      executionLogs.set(executionId, logData);
+    }
+    return executionId;
+  }
 };
 
-// Format file size for display
 const formatFileSize = (bytes) => {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
-// Check if path exists
 const pathExists = async (path) => {
   try {
     await fs.access(path);
@@ -135,7 +155,6 @@ const pathExists = async (path) => {
   }
 };
 
-// Check if Ansible is installed and working properly
 const checkAnsibleAvailability = async () => {
   try {
     const result = await execCommand('ansible --version');
@@ -146,7 +165,6 @@ const checkAnsibleAvailability = async () => {
   }
 };
 
-// API endpoint to check Ansible availability
 app.get('/api/ansible-status', async (req, res) => {
   try {
     const status = await checkAnsibleAvailability();
@@ -160,7 +178,6 @@ app.get('/api/ansible-status', async (req, res) => {
   }
 });
 
-// API endpoints for the Ansible UI
 app.get('/api/dashboard', async (req, res) => {
   try {
     const stats = await getDashboardStats();
@@ -171,7 +188,6 @@ app.get('/api/dashboard', async (req, res) => {
   }
 });
 
-// API endpoint to search for Ansible resources in custom paths
 app.post('/api/search-ansible-resources', async (req, res) => {
   try {
     const { customPath } = req.body;
@@ -180,7 +196,6 @@ app.post('/api/search-ansible-resources', async (req, res) => {
       return res.status(400).json({ message: 'Custom path is required' });
     }
     
-    // Check if the path exists
     try {
       const exists = await pathExists(customPath);
       if (!exists) {
@@ -196,7 +211,6 @@ app.post('/api/search-ansible-resources', async (req, res) => {
       });
     }
     
-    // Check for common Ansible structures
     const hasPlaybooks = await pathExists(path.join(customPath, 'playbooks')) || 
                          await pathExists(path.join(customPath, 'site.yml'));
     const hasInventories = await pathExists(path.join(customPath, 'inventories')) || 
@@ -218,16 +232,13 @@ app.post('/api/search-ansible-resources', async (req, res) => {
   }
 });
 
-// Helper function to create sample Ansible project
 const createSampleAnsibleProject = async (targetDir) => {
   try {
-    // Create directory structure
     await fs.mkdir(targetDir, { recursive: true });
     await fs.mkdir(path.join(targetDir, 'playbooks'), { recursive: true });
     await fs.mkdir(path.join(targetDir, 'inventories'), { recursive: true });
     await fs.mkdir(path.join(targetDir, 'roles'), { recursive: true });
     
-    // Create sample playbook
     const samplePlaybook = `---
 # Description: Sample playbook for beginners
 - name: Sample Playbook
@@ -248,7 +259,6 @@ const createSampleAnsibleProject = async (targetDir) => {
     
     await fs.writeFile(path.join(targetDir, 'playbooks', 'sample.yml'), samplePlaybook);
     
-    // Create sample inventory
     const sampleInventory = `[webservers]
 web1.example.com
 web2.example.com
@@ -262,7 +272,6 @@ ansible_user=ansible
     
     await fs.writeFile(path.join(targetDir, 'inventories', 'hosts'), sampleInventory);
     
-    // Create ansible.cfg
     const ansibleConfig = `[defaults]
 inventory = ./inventories/hosts
 remote_user = ansible
@@ -285,7 +294,6 @@ roles_path = ./roles
   }
 };
 
-// API endpoint to create sample Ansible project
 app.post('/api/create-sample-project', async (req, res) => {
   try {
     const { targetDir } = req.body;
@@ -395,16 +403,15 @@ app.post('/api/hosts', async (req, res) => {
   }
 });
 
-// Updated execute playbook endpoint to use real-time log capture
 app.post('/api/execute-playbook', async (req, res) => {
   try {
     const { playbookId, inventoryId } = req.body;
     
-    // Decode base64 IDs to get file paths
     const playbookPath = Buffer.from(playbookId, 'base64').toString();
     const inventoryPath = Buffer.from(inventoryId, 'base64').toString();
     
-    // Check if files exist
+    console.log(`API call to execute playbook: ${playbookPath} with inventory: ${inventoryPath}`);
+    
     if (!fs.existsSync(playbookPath)) {
       throw new Error(`Playbook not found: ${playbookPath}`);
     }
@@ -413,28 +420,30 @@ app.post('/api/execute-playbook', async (req, res) => {
       throw new Error(`Inventory not found: ${inventoryPath}`);
     }
     
-    // Generate a unique execution ID
     const executionId = Math.random().toString(36).substring(2, 15);
     
-    // Start the playbook execution process asynchronously
     runAnsiblePlaybook(playbookPath, inventoryPath, executionId);
     
-    // Return the execution ID immediately
     res.json({
       id: executionId,
       status: 'running',
     });
   } catch (error) {
     console.error('Error executing playbook:', error);
-    res.status(500).json({ message: `Error executing playbook: ${error.message}` });
+    res.status(500).json({ 
+      message: `Error executing playbook: ${error.message}`,
+      error: error.toString() 
+    });
   }
 });
 
-// New API endpoint to get playbook execution logs
 app.get('/api/playbook-logs/:executionId', (req, res) => {
   const { executionId } = req.params;
   
+  console.log(`API call to get logs for execution: ${executionId}`);
+  
   if (!executionLogs.has(executionId)) {
+    console.warn(`Execution ID not found: ${executionId}`);
     return res.status(404).json({ 
       message: `Execution ID not found: ${executionId}`,
       logs: [],
@@ -443,13 +452,16 @@ app.get('/api/playbook-logs/:executionId', (req, res) => {
   }
   
   const logData = executionLogs.get(executionId);
+  console.log(`Returning ${logData.logs.length} log entries for ${executionId}, status: ${logData.status}`);
+  
   res.json({
     logs: logData.logs,
-    status: logData.status
+    status: logData.status,
+    startTime: logData.startTime,
+    endTime: logData.endTime || null
   });
 });
 
-// API endpoint to list files in a directory
 app.get('/api/files', async (req, res) => {
   try {
     const directoryPath = req.query.path || '/etc/ansible';
@@ -510,7 +522,6 @@ app.get('/api/files', async (req, res) => {
   }
 });
 
-// API endpoint to read file content
 app.get('/api/files/read', async (req, res) => {
   try {
     const filePath = req.query.path;
@@ -539,7 +550,6 @@ app.get('/api/files/read', async (req, res) => {
   }
 });
 
-// API endpoint to write file content
 app.post('/api/files/write', async (req, res) => {
   try {
     const { path: filePath, content } = req.body;
@@ -548,7 +558,6 @@ app.post('/api/files/write', async (req, res) => {
       return res.status(400).json({ message: 'File path is required' });
     }
     
-    // Ensure directory exists
     await fs.mkdir(path.dirname(filePath), { recursive: true });
     
     await fs.writeFile(filePath, content, 'utf8');
@@ -559,7 +568,6 @@ app.post('/api/files/write', async (req, res) => {
   }
 });
 
-// API endpoint to create directory
 app.post('/api/files/mkdir', async (req, res) => {
   try {
     const { path: dirPath } = req.body;
@@ -576,7 +584,6 @@ app.post('/api/files/mkdir', async (req, res) => {
   }
 });
 
-// API endpoint to delete file or directory
 app.delete('/api/files/delete', async (req, res) => {
   try {
     const { path: itemPath, isDirectory } = req.body;
@@ -603,7 +610,6 @@ app.delete('/api/files/delete', async (req, res) => {
   }
 });
 
-// API endpoint to upload file
 app.post('/api/files/upload', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
@@ -614,18 +620,14 @@ app.post('/api/files/upload', upload.single('file'), async (req, res) => {
     const fileName = req.file.originalname;
     const filePath = path.join(directoryPath, fileName);
     
-    // Ensure directory exists
     await fs.mkdir(directoryPath, { recursive: true });
     
-    // Write the file
     await fs.writeFile(filePath, req.file.buffer);
     
-    // Get file stats
     const stats = await fs.stat(filePath);
     
     const isTemplate = fileName.endsWith('.j2') || fileName.endsWith('.template') || fileName.endsWith('.tpl');
     
-    // Return the new file item
     const fileItem = {
       id: Buffer.from(filePath).toString('base64'),
       name: fileName,
@@ -642,7 +644,6 @@ app.post('/api/files/upload', upload.single('file'), async (req, res) => {
   }
 });
 
-// API endpoint to update Ansible paths
 app.post('/api/update-paths', async (req, res) => {
   try {
     const { ANSIBLE_PLAYBOOKS_DIR, ANSIBLE_INVENTORIES_DIR, ANSIBLE_ROLES_DIR } = req.body;
@@ -652,9 +653,9 @@ app.post('/api/update-paths', async (req, res) => {
     if (ANSIBLE_ROLES_DIR) process.env.ANSIBLE_ROLES_DIR = ANSIBLE_ROLES_DIR;
     
     console.log("Updated Ansible paths:");
-    console.log(`- Playbooks: ${process.env.ANSIBLE_PLAYBOOKS_DIR}`);
-    console.log(`- Inventories: ${process.env.ANSIBLE_INVENTORIES_DIR}`);
-    console.log(`- Roles: ${process.env.ANSIBLE_ROLES_DIR}`);
+    console.log(`- Playbooks: ${process.env.ANSIBLE_PLAYBOOKS_DIR || '/etc/ansible/playbooks'}`);
+    console.log(`- Inventories: ${process.env.ANSIBLE_INVENTORIES_DIR || '/etc/ansible/inventories'}`);
+    console.log(`- Roles: ${process.env.ANSIBLE_ROLES_DIR || '/etc/ansible/roles'}`);
     
     res.json({
       success: true,
@@ -671,16 +672,13 @@ app.post('/api/update-paths', async (req, res) => {
   }
 });
 
-// Health check endpoint
 app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'healthy' });
 });
 
-// Main startup function
 async function startServer() {
   console.log(`Starting server in ${process.env.NODE_ENV || 'development'} mode...`);
   
-  // Check if we're in a Docker container
   const isDocker = await pathExists('/.dockerenv') || 
                    (await pathExists('/proc/1/cgroup') && 
                    (await fs.readFile('/proc/1/cgroup', 'utf8')).includes('docker'));
@@ -691,23 +689,19 @@ async function startServer() {
   console.log(`- Inventories: ${process.env.ANSIBLE_INVENTORIES_DIR || '/etc/ansible/inventories'}`);
   console.log(`- Roles: ${process.env.ANSIBLE_ROLES_DIR || '/etc/ansible/roles'}`);
   
-  // Check Ansible availability
   const ansibleStatus = await checkAnsibleAvailability();
   console.log(`Ansible availability: ${ansibleStatus.available ? 'Yes' : 'No'}`);
   if (ansibleStatus.available) {
     console.log(`Ansible version: ${ansibleStatus.version}`);
   }
   
-  // In development, set up Vite middleware
   if (process.env.NODE_ENV !== 'production') {
     try {
-      // Create Vite server in middleware mode
       const vite = await createViteServer({
         server: { middlewareMode: true },
         appType: 'spa',
       });
       
-      // Use vite's connect instance as middleware
       app.use(vite.middlewares);
       
       console.log('Vite development server middleware is active');
@@ -715,12 +709,10 @@ async function startServer() {
       console.error('Error creating Vite development server:', error);
     }
   } else {
-    // Serve static files from the build directory in production
     const staticPath = path.join(__dirname, 'dist');
     console.log(`Serving static files from: ${staticPath}`);
     app.use(express.static(staticPath));
     
-    // For SPA, serve index.html for any route not matched by API routes or static files
     app.get('*', (req, res) => {
       const indexPath = path.join(__dirname, 'dist', 'index.html');
       console.log(`Serving index.html from: ${indexPath}`);
@@ -728,14 +720,12 @@ async function startServer() {
     });
   }
 
-  // Start the server
   app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
     console.log(`Access the application at http://localhost:${PORT}`);
   });
 }
 
-// Start the server
 startServer().catch((err) => {
   console.error('Error starting server:', err);
 });

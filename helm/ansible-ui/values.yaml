@@ -53,6 +53,10 @@ env:
   ANSIBLE_ROLES_DIR: /etc/ansible/roles
   # Add log level for debugging
   LOG_LEVEL: info
+  # Enable verbose mode for ansible playbooks
+  ANSIBLE_VERBOSE: true
+  # Allow becoming root when needed
+  ANSIBLE_BECOME_ENABLED: true
 
 # License configuration
 license:
@@ -115,6 +119,10 @@ playbookExecution:
   tempDir: "/tmp/ansible-ui"
   # Keep logs for completed playbooks (in days, 0 = forever)
   logRetention: 30
+  # Use real-time execution for playbooks (recommended)
+  realTimeExecution: true
+  # Set verbosity level for ansible playbook (0-4)
+  verbosity: 1
 
 # Configure external services integration
 externalServices:
