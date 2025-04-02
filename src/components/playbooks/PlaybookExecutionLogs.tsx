@@ -28,7 +28,7 @@ export function PlaybookExecutionLogs({ playbook, inventoryId, onClose }: Playbo
   const [connectionError, setConnectionError] = useState<boolean>(false);
   const [pollingRetryCount, setPollingRetryCount] = useState<number>(0);
   const [hasAnsibleError, setHasAnsibleError] = useState<boolean>(false);
-  const MAX_RETRY_ATTEMPTS = 10; // Increased from 5 to 10
+  const MAX_RETRY_ATTEMPTS = 120; // Increase to 2 minutes worth of retries
 
   // Execute the playbook and get real logs
   useEffect(() => {
@@ -88,6 +88,7 @@ export function PlaybookExecutionLogs({ playbook, inventoryId, onClose }: Playbo
         const response = await fetch(`/api/playbook-logs/${execId}`);
         
         if (!response.ok) {
+          console.error(`Error fetching logs: ${response.status} ${response.statusText}`);
           throw new Error(`Failed to fetch logs: ${response.statusText}`);
         }
         
@@ -99,12 +100,9 @@ export function PlaybookExecutionLogs({ playbook, inventoryId, onClose }: Playbo
           setPollingRetryCount(0);
         }
         
-        // If we got an empty logs array but we already have logs, don't replace them
+        // Update logs if we have them
         if (Array.isArray(data.logs) && data.logs.length > 0) {
           setLogs(data.logs);
-        } else if (Array.isArray(data.logs) && logs.length === 1 && data.logs.length === 0) {
-          // Only add a waiting message if we just have the initial execution message
-          setLogs([`Executing playbook ${playbook.name} with inventory ID ${inventoryId}...`, "Waiting for logs from server..."]);
         }
         
         // Check if the execution is complete
@@ -114,16 +112,6 @@ export function PlaybookExecutionLogs({ playbook, inventoryId, onClose }: Playbo
           setExecutionEndTime(new Date());
           clearInterval(interval);
           setPollingInterval(null);
-          
-          // If we have no meaningful logs but execution has completed, provide feedback
-          if (data.logs.length <= 2) {
-            console.warn("Execution completed but received minimal logs");
-            setLogs(prev => [...prev, 
-              "Playbook execution completed, but received minimal logs from server.",
-              "Status: " + data.status.toUpperCase(),
-              "You may need to check the server logs for more details."
-            ]);
-          }
           
           // Check if there are any error messages in the logs
           const errorIndicators = ['fatal', 'failed=', 'ERROR!', 'error:', 'permission denied'];
@@ -166,7 +154,7 @@ export function PlaybookExecutionLogs({ playbook, inventoryId, onClose }: Playbo
           setHasAnsibleError(true);
         }
       }
-    }, 1000); // Poll every 1 second (reduced from 2 seconds)
+    }, 1000); // Poll every 1 second
     
     setPollingInterval(interval);
   };

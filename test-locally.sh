@@ -11,9 +11,9 @@ echo -e "${GREEN}Setting up local development environment...${NC}"
 
 # Create ansible directories if they don't exist
 echo "Creating local ansible directories..."
-ANSIBLE_PLAYBOOKS_DIR="./dev/ansible/playbooks"
-ANSIBLE_INVENTORIES_DIR="./dev/ansible/inventories" 
-ANSIBLE_ROLES_DIR="./dev/ansible/roles"
+ANSIBLE_PLAYBOOKS_DIR="./dev-ansible/playbooks"
+ANSIBLE_INVENTORIES_DIR="./dev-ansible/inventories" 
+ANSIBLE_ROLES_DIR="./dev-ansible/roles"
 
 mkdir -p "$ANSIBLE_PLAYBOOKS_DIR" "$ANSIBLE_INVENTORIES_DIR" "$ANSIBLE_ROLES_DIR"
 
@@ -33,8 +33,13 @@ echo "Setting up environment variables..."
 export ANSIBLE_PLAYBOOKS_DIR="$ANSIBLE_PLAYBOOKS_DIR"
 export ANSIBLE_INVENTORIES_DIR="$ANSIBLE_INVENTORIES_DIR"
 export ANSIBLE_ROLES_DIR="$ANSIBLE_ROLES_DIR"
+export ANSIBLE_VERBOSE="true"
+export ANSIBLE_BECOME_ENABLED="true"
+export ANSIBLE_BECOME_METHOD="sudo"
+export ANSIBLE_USER=$(whoami)
 
 echo -e "${GREEN}Building and starting the application with Docker Compose...${NC}"
+echo -e "${YELLOW}NOTE: The container will run with privileged permissions to allow Ansible to work correctly.${NC}"
 docker-compose up --build
 
 echo -e "${YELLOW}Application is shutting down...${NC}"

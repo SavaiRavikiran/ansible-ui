@@ -30,6 +30,9 @@ resources:
     cpu: 100m
     memory: 128Mi
 
+securityContext:
+  privileged: true
+
 persistence:
   enabled: true
   playbooks:
@@ -52,7 +55,7 @@ env:
   ANSIBLE_INVENTORIES_DIR: /etc/ansible/inventories
   ANSIBLE_ROLES_DIR: /etc/ansible/roles
   # Add log level for debugging
-  LOG_LEVEL: debug  # Changed from info to debug
+  LOG_LEVEL: debug
   # Enable verbose mode for ansible playbooks
   ANSIBLE_VERBOSE: true
   # Always enable become for proper privilege escalation
@@ -102,7 +105,8 @@ security:
   # Configure host security context for pods
   podSecurityContext: {}
   # Configure container security context
-  securityContext: {}
+  securityContext:
+    privileged: true
   # Network policies
   networkPolicies:
     enabled: false
@@ -127,6 +131,9 @@ playbookExecution:
   realTimeExecution: true
   # Set verbosity level for ansible playbook (0-4)
   verbosity: 2  # Increased from 1 to 2 for more detailed logs
+  # Always use become mode
+  becomeEnabled: true
+  becomeMethod: sudo
 
 # Configure external services integration
 externalServices:

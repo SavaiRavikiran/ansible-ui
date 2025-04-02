@@ -25,7 +25,8 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-const executionLogs = new Map();
+// Initialize the global storage for execution logs
+global.ansibleExecutions = {};
 
 app.use(cors());
 app.use(express.json());
@@ -51,11 +52,12 @@ const execCommand = (cmd) => {
 const runAnsiblePlaybook = (playbookPath, inventoryPath, executionId) => {
   console.log(`Starting execution ${executionId} of ${playbookPath} with inventory ${inventoryPath}`);
   
-  executionLogs.set(executionId, {
+  // Initialize the logs object in global storage
+  global.ansibleExecutions[executionId] = {
     logs: [`Starting execution of ${path.basename(playbookPath)} with inventory ${path.basename(inventoryPath)}`],
     status: 'running',
     startTime: new Date().toISOString(),
-  });
+  };
 
   let inventoryParam = inventoryPath;
   
@@ -87,54 +89,45 @@ const runAnsiblePlaybook = (playbookPath, inventoryPath, executionId) => {
     
     process.stdout.on('data', (data) => {
       console.log(`Ansible stdout (${executionId}): ${data.toString().trim()}`);
-      const logData = executionLogs.get(executionId);
-      if (logData) {
-        logData.logs.push(...data.toString().split('\n').filter(line => line.trim()));
-        executionLogs.set(executionId, logData);
+      if (global.ansibleExecutions[executionId]) {
+        global.ansibleExecutions[executionId].logs.push(...data.toString().split('\n').filter(line => line.trim()));
       }
     });
 
     process.stderr.on('data', (data) => {
       console.error(`Ansible stderr (${executionId}): ${data.toString().trim()}`);
-      const logData = executionLogs.get(executionId);
-      if (logData) {
-        logData.logs.push(...data.toString().split('\n').filter(line => line.trim()));
-        executionLogs.set(executionId, logData);
+      if (global.ansibleExecutions[executionId]) {
+        global.ansibleExecutions[executionId].logs.push(...data.toString().split('\n').filter(line => line.trim()));
       }
     });
 
     process.on('close', (code) => {
       console.log(`Ansible process (${executionId}) exited with code ${code}`);
-      const logData = executionLogs.get(executionId);
-      if (logData) {
-        logData.status = code === 0 ? 'success' : 'failed';
-        logData.logs.push(`Process completed with exit code ${code} (${logData.status})`);
-        logData.endTime = new Date().toISOString();
-        executionLogs.set(executionId, logData);
+      if (global.ansibleExecutions[executionId]) {
+        global.ansibleExecutions[executionId].status = code === 0 ? 'success' : 'failed';
+        global.ansibleExecutions[executionId].logs.push(`Process completed with exit code ${code} (${global.ansibleExecutions[executionId].status})`);
+        global.ansibleExecutions[executionId].endTime = new Date().toISOString();
+        global.ansibleExecutions[executionId].exitCode = code;
       }
     });
     
     process.on('error', (err) => {
       console.error(`Error spawning ansible process (${executionId}):`, err.message);
-      const logData = executionLogs.get(executionId);
-      if (logData) {
-        logData.status = 'failed';
-        logData.logs.push(`Error executing ansible-playbook command: ${err.message}`);
-        logData.logs.push('Please ensure ansible-playbook is installed and accessible');
-        logData.endTime = new Date().toISOString();
-        executionLogs.set(executionId, logData);
+      if (global.ansibleExecutions[executionId]) {
+        global.ansibleExecutions[executionId].status = 'failed';
+        global.ansibleExecutions[executionId].logs.push(`Error executing ansible-playbook command: ${err.message}`);
+        global.ansibleExecutions[executionId].logs.push('Please ensure ansible-playbook is installed and accessible');
+        global.ansibleExecutions[executionId].endTime = new Date().toISOString();
       }
     });
 
     return executionId;
   } catch (error) {
     console.error(`Failed to start ansible process (${executionId}):`, error);
-    const logData = executionLogs.get(executionId);
-    if (logData) {
-      logData.status = 'failed';
-      logData.logs.push(`Failed to start ansible process: ${error.message}`);
-      logData.endTime = new Date().toISOString();
-      executionLogs.set(executionId, logData);
+    if (global.ansibleExecutions[executionId]) {
+      global.ansibleExecutions[executionId].status = 'failed';
+      global.ansibleExecutions[executionId].logs.push(`Failed to start ansible process: ${error.message}`);
+      global.ansibleExecutions[executionId].endTime = new Date().toISOString();
     }
     return executionId;
   }
@@ -403,9 +396,6 @@ app.post('/api/hosts', async (req, res) => {
   }
 });
 
-// Global object to store execution logs
-global.ansibleExecutions = {};
-
 app.get('/api/playbook-logs/:executionId', (req, res) => {
   const { executionId } = req.params;
   
@@ -413,7 +403,7 @@ app.get('/api/playbook-logs/:executionId', (req, res) => {
   
   if (!global.ansibleExecutions || !global.ansibleExecutions[executionId]) {
     console.warn(`Execution ID not found: ${executionId}`);
-    return res.status(404).json({ 
+    return res.json({ 
       message: `Execution ID not found: ${executionId}`,
       logs: [],
       status: 'unknown'
@@ -449,11 +439,15 @@ app.post('/api/execute-playbook', async (req, res) => {
       throw new Error(`Inventory not found: ${inventoryPath}`);
     }
     
-    const result = await executePlaybook(playbookId, inventoryId);
+    // Generate a unique execution ID
+    const executionId = Math.random().toString(36).substring(2, 10);
+    
+    // Start running the playbook
+    runAnsiblePlaybook(playbookPath, inventoryPath, executionId);
     
     res.json({
-      id: result.id,
-      status: result.status,
+      id: executionId,
+      status: 'running',
     });
   } catch (error) {
     console.error('Error executing playbook:', error);
