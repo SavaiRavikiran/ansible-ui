@@ -117,9 +117,17 @@ export function DeploymentConfigurator() {
     try {
       setIsSaving(true);
       
+      // Fix: Ensure all required properties are explicitly defined
       const config: DeploymentConfig = {
         id: `custom-${Math.random().toString(36).substring(2, 10)}`,
-        ...values,
+        name: values.name, // Explicitly set required properties
+        description: values.description || "",
+        deploymentType: values.deploymentType,
+        clusterUrl: values.clusterUrl,
+        customDomain: values.customDomain,
+        sslEnabled: values.sslEnabled,
+        resources: values.resources,
+        environmentVariables: values.environmentVariables,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -144,9 +152,17 @@ export function DeploymentConfigurator() {
       setIsTesting(true);
       
       const values = form.getValues();
+      // Fix: Ensure all required properties are explicitly defined
       const config: DeploymentConfig = {
         id: `test-${Math.random().toString(36).substring(2, 10)}`,
-        ...values,
+        name: values.name, // Explicitly set required properties
+        description: values.description || "",
+        deploymentType: values.deploymentType,
+        clusterUrl: values.clusterUrl,
+        customDomain: values.customDomain,
+        sslEnabled: values.sslEnabled,
+        resources: values.resources,
+        environmentVariables: values.environmentVariables,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
