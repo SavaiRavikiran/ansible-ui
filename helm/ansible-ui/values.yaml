@@ -51,6 +51,8 @@ env:
   ANSIBLE_PLAYBOOKS_DIR: /etc/ansible/playbooks
   ANSIBLE_INVENTORIES_DIR: /etc/ansible/inventories
   ANSIBLE_ROLES_DIR: /etc/ansible/roles
+  # Add log level for debugging
+  LOG_LEVEL: info
 
 # License configuration
 license:
@@ -74,9 +76,57 @@ customDomain:
   tls:
     enabled: false
     secretName: "ansible-ui-tls"
+    # Add certificate manager integration
+    certManager:
+      enabled: false
+      issuer:
+        kind: "ClusterIssuer"
+        name: "letsencrypt-prod"
 
 # Prometheus monitoring
 monitoring:
   enabled: false
   serviceMonitor:
     enabled: false
+
+# Security configuration
+security:
+  # Configure host security context for pods
+  podSecurityContext: {}
+  # Configure container security context
+  securityContext: {}
+  # Network policies
+  networkPolicies:
+    enabled: false
+
+# Backup configuration
+backup:
+  enabled: false
+  schedule: "0 1 * * *"  # Default to 1 AM daily
+  retention: 7  # Number of backups to retain
+
+# Advanced playbook execution settings
+playbookExecution:
+  # Maximum concurrent playbook executions
+  maxConcurrent: 5
+  # Timeout in seconds for playbook execution (default 30 minutes)
+  timeoutSeconds: 1800
+  # Directory for temporary files
+  tempDir: "/tmp/ansible-ui"
+  # Keep logs for completed playbooks (in days, 0 = forever)
+  logRetention: 30
+
+# Configure external services integration
+externalServices:
+  # Git repositories integration
+  git:
+    enabled: false
+    repositories: []
+  # S3 compatible storage for logs
+  s3Storage:
+    enabled: false
+    endpoint: ""
+    bucket: ""
+    accessKey: ""
+    secretKey: ""
+    region: "us-east-1"

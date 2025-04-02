@@ -1,4 +1,3 @@
-
 import { exec } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -534,7 +533,7 @@ export const createRole = async (role: Role): Promise<Role> => {
   };
 };
 
-// Execute a playbook
+// Execute a playbook - this function now returns just the ID and lets the server handle the execution
 export const executePlaybook = async (playbookId: string, inventoryId: string): Promise<{ id: string; status: string }> => {
   try {
     // Decode base64 IDs to get file paths
@@ -550,40 +549,12 @@ export const executePlaybook = async (playbookId: string, inventoryId: string): 
       throw new Error(`Inventory not found: ${inventoryPath}`);
     }
     
-    // Build inventory parameter
-    let inventoryParam = inventoryPath;
-    
-    // If inventory is a directory, look for hosts file
-    if ((await fs.promises.stat(inventoryPath)).isDirectory()) {
-      const hostsFile = path.join(inventoryPath, 'hosts');
-      if (fs.existsSync(hostsFile)) {
-        inventoryParam = hostsFile;
-      } else {
-        // Try to find another inventory file
-        const files = await fs.promises.readdir(inventoryPath);
-        for (const file of files) {
-          if (file === 'hosts.yml' || file === 'hosts.yaml' || file === 'inventory.yml' || file === 'inventory.yaml') {
-            inventoryParam = path.join(inventoryPath, file);
-            break;
-          }
-        }
-      }
-    }
-    
-    // Create command
-    const command = `ansible-playbook -i "${inventoryParam}" "${playbookPath}"`;
-    console.log(`Executing command: ${command}`);
-    
-    // Execute the playbook
-    const result = await execCommand(command);
-    console.log('Command result:', result);
-    
-    // Check result for success/failure
-    const isSuccess = !result.includes('failed=') || result.includes('failed=0');
+    // This function now just returns an ID; the actual execution is handled by the server
+    // in a separate process to allow for real-time log streaming
     
     return {
       id: Math.random().toString(36).substring(2, 10),
-      status: isSuccess ? 'success' : 'failed',
+      status: 'running',
     };
   } catch (error) {
     console.error('Error executing playbook:', error);

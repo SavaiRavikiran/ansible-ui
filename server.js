@@ -1,3 +1,4 @@
+
 import express from 'express';
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -27,6 +28,9 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// In-memory store for playbook execution logs
+const executionLogs = new Map();
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -49,6 +53,69 @@ const execCommand = (cmd) => {
       resolve(stdout.trim());
     });
   });
+};
+
+// Utility function to execute Ansible playbook and capture real-time output
+const runAnsiblePlaybook = (playbookPath, inventoryPath, executionId) => {
+  // Initialize logs for this execution
+  executionLogs.set(executionId, {
+    logs: [`Starting execution of ${path.basename(playbookPath)} with inventory ${path.basename(inventoryPath)}`],
+    status: 'running'
+  });
+
+  // Build inventory parameter
+  let inventoryParam = inventoryPath;
+  
+  // If inventory is a directory, look for hosts file
+  if (fs.existsSync(inventoryPath) && fs.statSync(inventoryPath).isDirectory()) {
+    const hostsFile = path.join(inventoryPath, 'hosts');
+    if (fs.existsSync(hostsFile)) {
+      inventoryParam = hostsFile;
+    } else {
+      // Try to find another inventory file
+      const files = fs.readdirSync(inventoryPath);
+      for (const file of files) {
+        if (file === 'hosts.yml' || file === 'hosts.yaml' || file === 'inventory.yml' || file === 'inventory.yaml') {
+          inventoryParam = path.join(inventoryPath, file);
+          break;
+        }
+      }
+    }
+  }
+
+  // Create command with verbose output
+  const command = `ansible-playbook -i "${inventoryParam}" "${playbookPath}" -v`;
+  console.log(`Executing command: ${command}`);
+  
+  // Execute the playbook and capture output in real-time
+  const process = exec(command);
+  
+  // Capture stdout
+  process.stdout.on('data', (data) => {
+    console.log(`Ansible stdout: ${data}`);
+    const logData = executionLogs.get(executionId);
+    logData.logs.push(...data.toString().split('\n').filter(line => line.trim()));
+    executionLogs.set(executionId, logData);
+  });
+
+  // Capture stderr
+  process.stderr.on('data', (data) => {
+    console.error(`Ansible stderr: ${data}`);
+    const logData = executionLogs.get(executionId);
+    logData.logs.push(...data.toString().split('\n').filter(line => line.trim()));
+    executionLogs.set(executionId, logData);
+  });
+
+  // Handle process completion
+  process.on('close', (code) => {
+    console.log(`Ansible process exited with code ${code}`);
+    const logData = executionLogs.get(executionId);
+    logData.status = code === 0 ? 'success' : 'failed';
+    logData.logs.push(`Process completed with exit code ${code} (${logData.status})`);
+    executionLogs.set(executionId, logData);
+  });
+
+  return executionId;
 };
 
 // Format file size for display
@@ -328,15 +395,58 @@ app.post('/api/hosts', async (req, res) => {
   }
 });
 
+// Updated execute playbook endpoint to use real-time log capture
 app.post('/api/execute-playbook', async (req, res) => {
   try {
     const { playbookId, inventoryId } = req.body;
-    const result = await executePlaybook(playbookId, inventoryId);
-    res.json(result);
+    
+    // Decode base64 IDs to get file paths
+    const playbookPath = Buffer.from(playbookId, 'base64').toString();
+    const inventoryPath = Buffer.from(inventoryId, 'base64').toString();
+    
+    // Check if files exist
+    if (!fs.existsSync(playbookPath)) {
+      throw new Error(`Playbook not found: ${playbookPath}`);
+    }
+    
+    if (!fs.existsSync(inventoryPath)) {
+      throw new Error(`Inventory not found: ${inventoryPath}`);
+    }
+    
+    // Generate a unique execution ID
+    const executionId = Math.random().toString(36).substring(2, 15);
+    
+    // Start the playbook execution process asynchronously
+    runAnsiblePlaybook(playbookPath, inventoryPath, executionId);
+    
+    // Return the execution ID immediately
+    res.json({
+      id: executionId,
+      status: 'running',
+    });
   } catch (error) {
     console.error('Error executing playbook:', error);
     res.status(500).json({ message: `Error executing playbook: ${error.message}` });
   }
+});
+
+// New API endpoint to get playbook execution logs
+app.get('/api/playbook-logs/:executionId', (req, res) => {
+  const { executionId } = req.params;
+  
+  if (!executionLogs.has(executionId)) {
+    return res.status(404).json({ 
+      message: `Execution ID not found: ${executionId}`,
+      logs: [],
+      status: 'unknown'
+    });
+  }
+  
+  const logData = executionLogs.get(executionId);
+  res.json({
+    logs: logData.logs,
+    status: logData.status
+  });
 });
 
 // API endpoint to list files in a directory

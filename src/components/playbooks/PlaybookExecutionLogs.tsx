@@ -21,11 +21,12 @@ export function PlaybookExecutionLogs({ playbook, inventoryId, onClose }: Playbo
   const [isRunning, setIsRunning] = useState(true);
   const [status, setStatus] = useState<'running' | 'success' | 'failed'>('running');
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const logIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [executionId, setExecutionId] = useState<string | null>(null);
   const [executionStartTime, setExecutionStartTime] = useState<Date>(new Date());
   const [executionEndTime, setExecutionEndTime] = useState<Date | null>(null);
+  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
 
-  // Simulated log generation
+  // Execute the playbook and get real logs
   useEffect(() => {
     if (!isRunning) return;
     
@@ -33,59 +34,67 @@ export function PlaybookExecutionLogs({ playbook, inventoryId, onClose }: Playbo
     setExecutionStartTime(new Date());
     setExecutionEndTime(null);
     
-    const logMessages = [
-      `PLAY [${playbook.name}] ******************************************************************`,
-      "TASK [Gathering Facts] ******************************************************************",
-      "ok: [server1.example.com]",
-      "ok: [server2.example.com]",
-      `TASK [Run ${playbook.name}] *************************************************************`,
-      "changed: [server1.example.com]",
-      "changed: [server2.example.com]",
-      "TASK [Restart services] *****************************************************************",
-      "ok: [server1.example.com]",
-    ];
-    
-    let index = 0;
-    
-    logIntervalRef.current = setInterval(() => {
-      if (index < logMessages.length) {
-        setLogs(prev => [...prev, logMessages[index]]);
-        index++;
-      } else {
-        clearInterval(logIntervalRef.current as NodeJS.Timeout);
+    const runPlaybook = async () => {
+      try {
+        setLogs([`Executing playbook ${playbook.name} with inventory ID ${inventoryId}...`]);
         
-        // Randomly decide if the playbook succeeds or fails for demonstration
-        const result = Math.random() > 0.3 ? 'success' : 'failed';
+        // Call the API to execute the playbook
+        const result = await executePlaybook(playbook.id, inventoryId);
+        setExecutionId(result.id);
         
-        if (result === 'success') {
-          setLogs(prev => [
-            ...prev, 
-            "PLAY RECAP **************************************************************************",
-            "server1.example.com : ok=3 changed=1 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0",
-            "server2.example.com : ok=3 changed=1 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0"
-          ]);
-          setStatus('success');
-        } else {
-          setLogs(prev => [
-            ...prev,
-            "TASK [Verify deployment] **************************************************************",
-            "fatal: [server2.example.com]: FAILED! => {\"changed\": false, \"msg\": \"Connection timed out\"}",
-            "PLAY RECAP **************************************************************************",
-            "server1.example.com : ok=3 changed=1 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0",
-            "server2.example.com : ok=2 changed=1 unreachable=0 failed=1 skipped=0 rescued=0 ignored=0"
-          ]);
-          setStatus('failed');
-        }
-        
+        // Start polling for logs
+        pollForLogs(result.id);
+      } catch (error) {
+        console.error("Error executing playbook:", error);
+        setLogs(prev => [...prev, "Error: Failed to execute playbook. Check server logs for details."]);
+        setStatus('failed');
         setIsRunning(false);
         setExecutionEndTime(new Date());
       }
-    }, 800);
+    };
+    
+    runPlaybook();
     
     return () => {
-      if (logIntervalRef.current) clearInterval(logIntervalRef.current);
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+      }
     };
-  }, [isRunning, playbook.name]);
+  }, [isRunning, playbook, inventoryId]);
+  
+  // Poll for logs from the server
+  const pollForLogs = (execId: string) => {
+    // Clear any existing interval
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+    }
+    
+    const interval = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/playbook-logs/${execId}`);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch logs: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        setLogs(data.logs || []);
+        
+        // Check if the execution is complete
+        if (data.status && data.status !== 'running') {
+          setStatus(data.status as 'success' | 'failed');
+          setIsRunning(false);
+          setExecutionEndTime(new Date());
+          clearInterval(interval);
+          setPollingInterval(null);
+        }
+      } catch (error) {
+        console.error("Error polling for logs:", error);
+        // Don't stop polling on error, just log it
+      }
+    }, 2000); // Poll every 2 seconds
+    
+    setPollingInterval(interval);
+  };
   
   // Auto-scroll to bottom when logs update
   useEffect(() => {
@@ -103,8 +112,6 @@ export function PlaybookExecutionLogs({ playbook, inventoryId, onClose }: Playbo
     setStatus('running');
     
     try {
-      // In a real implementation, we would call the API to re-run the playbook
-      // For now, we'll just simulate it
       toast.success(`Rerunning playbook ${playbook.name}`);
     } catch (error) {
       toast.error("Failed to rerun playbook");
@@ -160,6 +167,21 @@ ${logs.join('\n')}
     return `${minutes}m ${remainingSeconds}s`;
   };
 
+  // Format log line with appropriate styling
+  const formatLogLine = (line: string) => {
+    if (line.includes("FAILED") || line.includes("fatal")) {
+      return <span className="text-red-400">{line}</span>;
+    } else if (line.includes("ok:")) {
+      return <span className="text-green-400">{line}</span>;
+    } else if (line.includes("changed:")) {
+      return <span className="text-yellow-400">{line}</span>;
+    } else if (line.includes("PLAY") || line.includes("TASK") || line.includes("RECAP")) {
+      return <span className="text-blue-400 font-bold">{line}</span>;
+    } else {
+      return line;
+    }
+  };
+
   return (
     <AnimatePresence>
       <motion.div 
@@ -207,6 +229,9 @@ ${logs.join('\n')}
         </div>
         
         <ScrollArea className="h-[400px] border rounded-md bg-black/5 dark:bg-black text-green-400 font-mono text-sm p-2" ref={scrollAreaRef}>
+          {logs.length === 0 && isRunning && (
+            <div className="py-2">Waiting for logs...</div>
+          )}
           {logs.map((log, index) => (
             <motion.div 
               key={index}
@@ -215,17 +240,7 @@ ${logs.join('\n')}
               transition={{ duration: 0.3 }}
               className="py-1 whitespace-pre-wrap"
             >
-              {log.includes("FAILED") || log.includes("fatal") ? (
-                <span className="text-red-400">{log}</span>
-              ) : log.includes("ok:") ? (
-                <span className="text-green-400">{log}</span>
-              ) : log.includes("changed:") ? (
-                <span className="text-yellow-400">{log}</span>
-              ) : log.includes("PLAY") || log.includes("TASK") || log.includes("RECAP") ? (
-                <span className="text-blue-400 font-bold">{log}</span>
-              ) : (
-                log
-              )}
+              {formatLogLine(log)}
             </motion.div>
           ))}
           {isRunning && (
@@ -240,7 +255,7 @@ ${logs.join('\n')}
         </ScrollArea>
         
         <div className="mt-4 flex justify-end gap-2">
-          {status === 'failed' && (
+          {(status === 'failed' || !isRunning) && (
             <Button onClick={handleRerun} className="gap-2">
               <RotateCcw className="h-4 w-4" />
               Rerun Playbook
