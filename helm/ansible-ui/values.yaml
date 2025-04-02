@@ -11,6 +11,17 @@ service:
   type: ClusterIP
   port: 3001
 
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: chart-example.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
 resources:
   limits:
     cpu: 500m
@@ -40,3 +51,32 @@ env:
   ANSIBLE_PLAYBOOKS_DIR: /etc/ansible/playbooks
   ANSIBLE_INVENTORIES_DIR: /etc/ansible/inventories
   ANSIBLE_ROLES_DIR: /etc/ansible/roles
+
+# License configuration
+license:
+  # Set to true to require license validation
+  enabled: false
+  # Maximum number of allowed users
+  maxUsers: 5
+  # Features to enable
+  features:
+    - core
+    - playbooks
+    - inventories
+    - roles
+    - job-scheduler
+    - cloud-inventory
+
+# Optional custom domain configuration
+customDomain:
+  enabled: false
+  name: "ansible-ui.example.com"
+  tls:
+    enabled: false
+    secretName: "ansible-ui-tls"
+
+# Prometheus monitoring
+monitoring:
+  enabled: false
+  serviceMonitor:
+    enabled: false
