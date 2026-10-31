@@ -3,6 +3,10 @@
 
 A modern web interface for managing Ansible and other popular DevOps tools.
 
+## Screenshots
+
+![Ansible UI dashboard](docs/ansible-ui-dashboard.png)
+
 ## Project Overview
 
 Ansible UI is a modern web interface for managing Ansible automation. It provides a clean, intuitive interface for:
@@ -131,7 +135,7 @@ This project is built with:
 
 - **Backend**:
   - Express.js
-  - SQLite (for data storage)
+  - Filesystem-based storage (playbooks, inventories, and roles are read from and written directly to disk)
   - Ansible (for automation execution)
 
 - **Deployment**:
@@ -151,9 +155,16 @@ cd ansible-ui
 # Install dependencies
 npm install
 
-# Start development server with hot reload
-npm run dev
+# Start both the backend API (port 3001) and the frontend dev server (port 8080)
+# with hot reload
+chmod +x dev.sh
+./dev.sh
 ```
+
+`dev.sh` starts `server.js` (the Express/Ansible backend) and the Vite frontend
+together, and proxies `/api` requests from the frontend to the backend. If you
+only run `npm run dev`, you get the Vite frontend alone — API calls will fail
+unless `node server.js` is also running separately on port 3001.
 
 For testing with Docker during development:
 
@@ -171,12 +182,13 @@ chmod +x test-locally.sh
 2. **Permission issues**: Ensure appropriate permissions for Ansible directories
 3. **Connection refused**: Check if the application port is open and not in use
 4. **Docker build fails**: Make sure Docker has enough resources allocated
+5. **Vite dev server fails to start with `EAFNOSUPPORT: address family not supported :::8080`**: this happens on hosts/containers without IPv6 support. `vite.config.ts` binds to `0.0.0.0` for this reason; if you still see it, pass `--host 0.0.0.0` explicitly when invoking Vite.
 
 ### Logs
 
-- Server logs: `server-logs.txt`
+- Server logs: printed to stdout/stderr by `node server.js` (or `docker-compose logs -f` when running in Docker)
 - Browser console: Check Developer Tools in your browser
 
 ## License
 
-[MIT License](LICENSE)
+No license file is currently included in this repository. Until one is added, all rights are reserved by the project authors.
